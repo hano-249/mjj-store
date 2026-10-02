@@ -28,9 +28,8 @@ export const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
         {/* Modal Header */}
         <div className="relative h-56 w-full overflow-hidden bg-slate-950">
           <img
-            src={account.image}
+            src={account.squadImageBase64 || account.image}
             alt={account.title}
-            referrerPolicy="no-referrer"
             className="w-full h-full object-cover object-center filter brightness-90"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#0a0f24] via-[#0a0f24]/50 to-transparent" />

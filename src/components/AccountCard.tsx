@@ -67,9 +67,8 @@ export const AccountCard: React.FC<AccountCardProps> = ({
       <div className="relative h-48 w-full bg-slate-900 overflow-hidden cursor-pointer" onClick={() => onViewDetails(account)}>
         {!imgError ? (
           <img
-            src={account.image}
+            src={account.squadImageBase64 || account.image}
             alt={account.title}
-            referrerPolicy="no-referrer"
             onError={() => setImgError(true)}
             className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 brightness-95"
           />

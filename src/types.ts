@@ -14,6 +14,7 @@ export interface EFootballAccount {
   platform: 'mobile' | 'console';
   platformLabel: string; // e.g. "موبايل (Android / iOS)"
   image: string;
+  squadImageBase64?: string; // Direct Base64 Data URL
   featuredBadge?: string; // e.g. "الأكثر طلباً" or "تشكيلة أساطير"
   division: string; // e.g. "ديفيجن 1 (Division 1)"
   manager: string; // e.g. "بيب غوارديولا (Boost 88)" or "يورغن كلوب"

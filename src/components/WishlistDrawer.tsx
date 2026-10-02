@@ -62,9 +62,8 @@ export const WishlistDrawer: React.FC<WishlistDrawerProps> = ({
               >
                 <div className="flex items-start gap-3">
                   <img
-                    src={account.image}
+                    src={account.squadImageBase64 || account.image}
                     alt={account.title}
-                    referrerPolicy="no-referrer"
                     className="w-16 h-16 rounded-lg object-cover border border-slate-700 shrink-0 cursor-pointer"
                     onClick={() => {
                       onClose();

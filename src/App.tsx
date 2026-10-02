@@ -121,6 +121,7 @@ export default function App() {
             const isSold = d.status === 'مباع' || d.sold === true;
             if (!isSold) {
               const ratingNum = parseInt(d.rating || d.teamStrength || '3150', 10) || 3150;
+              const imgUrl = d.squadImageBase64 || d.image || '/src/assets/images/squad_showcase_legends_1790969434039.jpg';
               list.push({
                 id: docSnap.id,
                 title: d.title || 'حساب eFootball 2026',
@@ -135,7 +136,8 @@ export default function App() {
                 platform: d.game?.toLowerCase().includes('console') ? 'console' : 'mobile',
                 platformLabel: d.status === 'محجوز' ? 'محجوز لعميل' : 'موبايل (Android / iOS)',
                 featuredBadge: d.status === 'محجوز' ? 'محجوز لعميل 🟡' : undefined,
-                image: d.image || '/src/assets/images/squad_showcase_legends_1790969434039.jpg',
+                image: imgUrl,
+                squadImageBase64: d.squadImageBase64 || d.image,
                 division: d.division || 'ديفيجن 1',
                 manager: d.manager || 'تشكيلة أساطير',
                 formation: d.formation || '4-3-3',

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { auth, signOut, db, storage, ref, uploadBytesResumable, getDownloadURL } from '../firebase';
+import { auth, signOut, db } from '../firebase';
 import { 
   collection, 
   addDoc, 
@@ -29,7 +29,7 @@ import {
   Edit2
 } from 'lucide-react';
 import { UserProfile } from '../types';
-import { compressSquadImage } from '../utils/imageCompressor';
+import { compressImageToBase64 } from '../utils/imageCompressor';
 
 export type AccountStatus = 'متاح' | 'محجوز' | 'مباع';
 
@@ -40,7 +40,8 @@ export interface FirestoreAccount {
   description: string;        // وصف التشكيلة
   rating: string | number;    // التقييم (مثال: 3150 أو 5/5)
   status: AccountStatus;      // حالة الحساب: متاح / محجوز / مباع
-  image: string;              // رابط صورة التشكيلة من Firebase Storage (mj-squads/)
+  squadImageBase64?: string;  // Base64 Data URL مباشرة في Firestore
+  image?: string;             // رابط الصورة كـ fallback
   createdAt?: unknown;
 }
 
@@ -73,13 +74,10 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
   const [formRating, setFormRating] = useState('3150');
   const [formStatus, setFormStatus] = useState<AccountStatus>('متاح');
 
-  // Image Upload & Compression State
-  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  // Base64 Image Compression State (100% Free - Zero Storage / Zero Billing)
+  const [squadImageBase64, setSquadImageBase64] = useState<string | null>(null);
   const [imageSizeKB, setImageSizeKB] = useState<number | null>(null);
-  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [submittingForm, setSubmittingForm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -109,7 +107,6 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
           const list: FirestoreAccount[] = [];
           snapshot.forEach((d) => {
             const data = d.data();
-            // Determine status fallback
             let statusVal: AccountStatus = 'متاح';
             if (data.status === 'محجوز') statusVal = 'محجوز';
             else if (data.status === 'مباع' || data.sold === true) statusVal = 'مباع';
@@ -122,7 +119,8 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
               description: data.description || '',
               rating: data.rating || data.teamStrength || '3150',
               status: statusVal,
-              image: data.image || '',
+              squadImageBase64: data.squadImageBase64 || data.image || '',
+              image: data.squadImageBase64 || data.image || '',
               createdAt: data.createdAt
             });
           });
@@ -156,89 +154,56 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
     };
   }, []);
 
-  // Handle Image File Selection with client-side Canvas Compression < 400KB
+  // Handle Image Selection with Canvas compression to 800px width & 0.6 quality -> Base64 Data URL
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploadError(null);
     setIsCompressing(true);
-    setUploadProgress(0);
-    setUploadedImageUrl(null);
 
     try {
-      // 1. Client-side compression to under 400KB (target ~380KB)
-      const compressed = await compressSquadImage(file, 390);
-      setImagePreviewUrl(compressed.previewUrl);
-      setImageSizeKB(compressed.sizeKB);
+      // Compress with Canvas: 800px width & 0.6 JPEG quality -> Base64 Data URL
+      const result = await compressImageToBase64(file);
+      setSquadImageBase64(result.base64);
+      setImageSizeKB(result.sizeKB);
       setIsCompressing(false);
-
-      // 2. Upload to Firebase Storage path: mj-squads/
-      setIsUploading(true);
-      const cleanFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const storagePath = `mj-squads/${Date.now()}_${cleanFileName}`;
-      const storageRef = ref(storage, storagePath);
-
-      const uploadTask = uploadBytesResumable(storageRef, compressed.blob, {
-        contentType: 'image/jpeg'
-      });
-
-      uploadTask.on(
-        'state_changed',
-        (snapshot) => {
-          const progress = Math.round(
-            (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-          );
-          setUploadProgress(progress);
-        },
-        (error) => {
-          setIsUploading(false);
-          setUploadError('فشل رفع الصورة إلى التخزين السحابي: ' + error.message);
-        },
-        async () => {
-          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-          setUploadedImageUrl(downloadUrl);
-          setIsUploading(false);
-        }
-      );
     } catch (err: unknown) {
       setIsCompressing(false);
-      setIsUploading(false);
-      setUploadError(err instanceof Error ? err.message : 'حدث خطأ أثناء معالجة الصورة');
+      setUploadError(err instanceof Error ? err.message : 'حدث خطأ أثناء معالجة وضغط الصورة');
     }
   };
 
-  // Delete image preview before saving
-  const handleDeleteImagePreview = () => {
-    setImagePreviewUrl(null);
+  // Delete image preview / clear field before saving
+  const handleDeleteImage = () => {
+    setSquadImageBase64(null);
     setImageSizeKB(null);
-    setUploadedImageUrl(null);
-    setUploadProgress(0);
     setUploadError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
-  // Submit Add Account (NO credentials stored anywhere)
+  // Submit Add Account (Stores Base64 directly into Firestore 'squadImageBase64' - 100% Free)
   const handleSubmitAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle || !formPrice) return;
-    if (!uploadedImageUrl) {
-      setUploadError('يرجى رفع صورة التشكيلة أولاً قبل حفظ الحساب');
+    if (!squadImageBase64) {
+      setUploadError('يرجى اختيار صورة التشكيلة أولاً قبل حفظ الحساب');
       return;
     }
 
     setSubmittingForm(true);
 
     try {
-      const accountData: Omit<FirestoreAccount, 'id'> = {
+      const accountData = {
         title: formTitle.trim(),
         price: Number(formPrice),
         description: formDescription.trim(),
         rating: formRating.trim() || '3150',
         status: formStatus,
-        image: uploadedImageUrl,
+        squadImageBase64: squadImageBase64,
+        image: squadImageBase64, // Keep image field in sync
         createdAt: serverTimestamp()
       };
 
@@ -250,7 +215,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
       setFormDescription('');
       setFormRating('3150');
       setFormStatus('متاح');
-      handleDeleteImagePreview();
+      handleDeleteImage();
     } catch (err: unknown) {
       setUploadError(err instanceof Error ? err.message : 'فشل حفظ الحساب في قاعدة البيانات');
     } finally {
@@ -363,7 +328,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
             </h1>
             <p className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" />
-              <span>نظام إدارة آمن 100% (تسليم وبيع يدوي عبر واتساب)</span>
+              <span>نظام مجاني 100% (تخزين مباشر في Firestore بدون Storage)</span>
             </p>
           </div>
         </div>
@@ -405,7 +370,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
               <span className="text-3xl font-black text-white font-mono tabular-nums">
                 {availableCount}
               </span>
-              <span className="text-xs text-slate-400">حساب متاح للعرض</span>
+              <span className="text-xs text-slate-400">حساب معروض للبيع</span>
             </div>
           </div>
 
@@ -443,7 +408,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
 
         </div>
 
-        {/* 1. فورم إضافة حساب جديد (آمن 100% بدون أي بيانات تسجيل دخول) */}
+        {/* 1. فورم إضافة حساب جديد (آمن ومجاني 100% - تحويل Base64 فوري) */}
         <div className="bg-[#070b1a] border border-amber-500/30 rounded-2xl p-6 shadow-2xl">
           <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800">
             <div>
@@ -452,12 +417,12 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
                 <span>إضافة حساب جديد للعرض بالمتجر</span>
               </h2>
               <p className="text-xs text-slate-400 mt-1">
-                (عنوان الحساب - السعر - وصف التشكيلة - التقييم - الحالة) مع رفع صورة التشكيلة المباشرة
+                (عنوان الحساب - السعر - وصف التشكيلة - التقييم - الحالة) مع ضغط وحفظ صورة التشكيلة كـ Base64
               </p>
             </div>
 
             <div className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-lg">
-              🛡️ بدون أي بيانات دخول (آمن)
+              ✨ حل مجاني 100% بدون Storage
             </div>
           </div>
 
@@ -548,13 +513,13 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
 
             </div>
 
-            {/* 6. رفع صورة التشكيلة من الجهاز مع ضغط تلقائي أقل من 400KB ورفع إلى Firebase Storage */}
+            {/* 6. رفع وضغط صورة التشكيلة إلى Base64 Data URL (عرض 800px وجودة 0.6) */}
             <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
               <label className="text-xs font-bold text-white block mb-2">
-                صورة التشكيلة (رفع مباشر من الجهاز إلى Firebase Storage) *
+                صورة التشكيلة (ضغط Canvas فوري وحفظ Base64 بدون Storage) *
               </label>
 
-              {/* Hidden file input */}
+              {/* Single File Input */}
               <input
                 type="file"
                 accept="image/*"
@@ -563,7 +528,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
                 className="hidden"
               />
 
-              {!imagePreviewUrl ? (
+              {!squadImageBase64 ? (
                 <div>
                   <button
                     type="button"
@@ -577,56 +542,38 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
                       اضغط هنا لرفع صورة التشكيلة من جهازك
                     </span>
                     <span className="text-[11px] text-slate-400">
-                      (يتم ضغط الصورة تلقائياً لأقل من 400KB لسرعة التصفح)
+                      (يتم ضغط الصورة بالـ Canvas إلى عرض 800px وجودة 0.6 وتحويلها إلى Base64 Data URL مباشرة)
                     </span>
                   </button>
                 </div>
               ) : (
-                /* Preview + Progress + Delete button */
+                /* Preview + Info + Delete button */
                 <div className="space-y-3">
                   <div className="flex flex-col sm:flex-row items-center gap-4 p-3 rounded-xl bg-slate-950 border border-slate-800">
                     <img
-                      src={imagePreviewUrl}
+                      src={squadImageBase64}
                       alt="معاينة التشكيلة"
                       className="w-24 h-24 rounded-lg object-cover border border-slate-700 shrink-0"
                     />
 
                     <div className="flex-1 min-w-0 w-full space-y-1.5 text-right">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-white">معاينة صورة التشكيلة</span>
+                        <span className="text-xs font-bold text-white">معاينة صورة التشكيلة (Base64 Data URL)</span>
                         {imageSizeKB && (
                           <span className="text-[11px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
-                            الحجم بعد الضغط: {imageSizeKB} KB (أقل من 400KB ✅)
+                            الحجم: {imageSizeKB} KB (مضغوطة وخفيفة ✅)
                           </span>
                         )}
                       </div>
 
-                      {/* Upload Progress Bar */}
-                      {isUploading && (
-                        <div className="w-full space-y-1">
-                          <div className="flex justify-between text-[10px] text-slate-400">
-                            <span>جارٍ الرفع إلى Firebase Storage (mj-squads/)...</span>
-                            <span className="font-mono">{uploadProgress}%</span>
-                          </div>
-                          <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all duration-200"
-                              style={{ width: `${uploadProgress}%` }}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {uploadedImageUrl && (
-                        <div className="text-[11px] text-emerald-400 flex items-center gap-1.5 font-semibold">
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>تم رفع الصورة بنجاح وحفظها في التخزين السحابي</span>
-                        </div>
-                      )}
+                      <div className="text-[11px] text-emerald-400 flex items-center gap-1.5 font-semibold">
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>تم الضغط بنجاح (عرض 800px، جودة 0.6) وجاهزة للحفظ المباشر في Firestore</span>
+                      </div>
 
                       {isCompressing && (
                         <div className="text-[11px] text-amber-300">
-                          جارٍ ضغط الصورة بالجودة المثالية...
+                          جارٍ معالجة وضغط الصورة...
                         </div>
                       )}
                     </div>
@@ -634,7 +581,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
                     {/* زر حذف الصورة قبل الحفظ */}
                     <button
                       type="button"
-                      onClick={handleDeleteImagePreview}
+                      onClick={handleDeleteImage}
                       className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-red-950/40 border border-red-500/30 text-red-300 hover:bg-red-900/40 text-xs font-bold transition-colors shrink-0"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -656,15 +603,13 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
             <div className="flex justify-end pt-2">
               <button
                 type="submit"
-                disabled={submittingForm || isUploading || isCompressing || !uploadedImageUrl}
+                disabled={submittingForm || isCompressing || !squadImageBase64}
                 className="px-8 py-3 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Tag className="w-4 h-4" />
                 <span>
                   {submittingForm
-                    ? 'جارٍ الحفظ...'
-                    : isUploading
-                    ? 'جارٍ رفع الصورة...'
+                    ? 'جارٍ الحفظ في Firestore...'
                     : 'إضافة الحساب للمتجر'}
                 </span>
               </button>
@@ -734,94 +679,96 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
                     </td>
                   </tr>
                 ) : filteredAccounts.length > 0 ? (
-                  filteredAccounts.map((acc) => (
-                    <tr key={acc.id} className="hover:bg-slate-900/40 transition-colors">
-                      
-                      {/* صورة التشكيلة */}
-                      <td className="p-3.5">
-                        <div className="w-14 h-14 rounded-lg overflow-hidden border border-slate-700 bg-slate-900 shrink-0">
-                          {acc.image ? (
-                            <img
-                              src={acc.image}
-                              alt={acc.title}
-                              referrerPolicy="no-referrer"
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-slate-600">
-                              <ImageIcon className="w-6 h-6" />
-                            </div>
-                          )}
-                        </div>
-                      </td>
+                  filteredAccounts.map((acc) => {
+                    const imgSrc = acc.squadImageBase64 || acc.image;
+                    return (
+                      <tr key={acc.id} className="hover:bg-slate-900/40 transition-colors">
+                        
+                        {/* صورة التشكيلة */}
+                        <td className="p-3.5">
+                          <div className="w-14 h-14 rounded-lg overflow-hidden border border-slate-700 bg-slate-900 shrink-0">
+                            {imgSrc ? (
+                              <img
+                                src={imgSrc}
+                                alt={acc.title}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-slate-600">
+                                <ImageIcon className="w-6 h-6" />
+                              </div>
+                            )}
+                          </div>
+                        </td>
 
-                      {/* عنوان الحساب */}
-                      <td className="p-3.5">
-                        <span className="font-bold text-white block max-w-sm truncate text-sm">
-                          {acc.title}
-                        </span>
-                        {acc.description && (
-                          <span className="text-[11px] text-slate-400 block truncate max-w-sm mt-0.5">
-                            {acc.description}
+                        {/* عنوان الحساب */}
+                        <td className="p-3.5">
+                          <span className="font-bold text-white block max-w-sm truncate text-sm">
+                            {acc.title}
                           </span>
-                        )}
-                      </td>
+                          {acc.description && (
+                            <span className="text-[11px] text-slate-400 block truncate max-w-sm mt-0.5">
+                              {acc.description}
+                            </span>
+                          )}
+                        </td>
 
-                      {/* السعر */}
-                      <td className="p-3.5">
-                        <span className="font-black text-amber-400 font-mono text-base block tabular-nums">
-                          {Number(acc.price).toLocaleString()} SDG
-                        </span>
-                      </td>
+                        {/* السعر */}
+                        <td className="p-3.5">
+                          <span className="font-black text-amber-400 font-mono text-base block tabular-nums">
+                            {Number(acc.price).toLocaleString()} SDG
+                          </span>
+                        </td>
 
-                      {/* التقييم */}
-                      <td className="p-3.5">
-                        <span className="inline-flex items-center gap-1 font-mono text-xs text-blue-300 font-bold bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded">
-                          <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                          <span>{acc.rating || '3150'}</span>
-                        </span>
-                      </td>
+                        {/* التقييم */}
+                        <td className="p-3.5">
+                          <span className="inline-flex items-center gap-1 font-mono text-xs text-blue-300 font-bold bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded">
+                            <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                            <span>{acc.rating || '3150'}</span>
+                          </span>
+                        </td>
 
-                      {/* الحالة */}
-                      <td className="p-3.5">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold ${
-                            acc.status === 'متاح'
-                              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                              : acc.status === 'محجوز'
-                              ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                              : 'bg-red-500/15 text-red-300 border border-red-500/30'
-                          }`}
-                        >
-                          {acc.status === 'متاح' && '🟢 متاح'}
-                          {acc.status === 'محجوز' && '🟡 محجوز'}
-                          {acc.status === 'مباع' && '🔴 مباع'}
-                        </span>
-                      </td>
-
-                      {/* زر تعديل السعر والحالة فقط + حذف */}
-                      <td className="p-3.5 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => handleOpenQuickEdit(acc)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-400/10 border border-amber-400/30 text-amber-300 hover:bg-amber-400/20 text-xs font-bold transition-colors"
+                        {/* الحالة */}
+                        <td className="p-3.5">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold ${
+                              acc.status === 'متاح'
+                                ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                                : acc.status === 'محجوز'
+                                ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                                : 'bg-red-500/15 text-red-300 border border-red-500/30'
+                            }`}
                           >
-                            <Edit2 className="w-3.5 h-3.5" />
-                            <span>تعديل السعر والحالة</span>
-                          </button>
+                            {acc.status === 'متاح' && '🟢 متاح'}
+                            {acc.status === 'محجوز' && '🟡 محجوز'}
+                            {acc.status === 'مباع' && '🔴 مباع'}
+                          </span>
+                        </td>
 
-                          <button
-                            onClick={() => handleDeleteAccount(acc.id)}
-                            className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                            title="حذف الحساب"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
+                        {/* زر تعديل السعر والحالة فقط + حذف */}
+                        <td className="p-3.5 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => handleOpenQuickEdit(acc)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-400/10 border border-amber-400/30 text-amber-300 hover:bg-amber-400/20 text-xs font-bold transition-colors"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                              <span>تعديل السعر والحالة</span>
+                            </button>
 
-                    </tr>
-                  ))
+                            <button
+                              onClick={() => handleDeleteAccount(acc.id)}
+                              className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                              title="حذف الحساب"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td colSpan={6} className="p-8 text-center text-slate-400">
