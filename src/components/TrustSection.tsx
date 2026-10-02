@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, Zap, Headphones, RefreshCw, Lock, Check, Award } from 'lucide-react';
+import { Zap, Headphones, Lock } from 'lucide-react';
 
 export const TrustSection: React.FC = () => {
   const trustPillars = [
@@ -9,13 +9,6 @@ export const TrustSection: React.FC = () => {
       description: 'بمجرد تأكيد عملية التحويل، يتم إرسال إيميل وكلمة سر حساب Konami ID وربطه برقم هاتفك فورياً خلال 5 إلى 10 دقائق فقط دون أي تأخير.',
       color: 'text-amber-400',
       bgColor: 'bg-amber-400/10 border-amber-400/20'
-    },
-    {
-      icon: ShieldCheck,
-      title: 'ضمان استرجاع كامل 100%',
-      description: 'جميع حساباتنا مفحوصة ومضمونة رسمياً ضد الباند أو الاسترجاع، مع ضمان مكتوب يصل إلى 60 يوماً واسترجاع كامل لأموالك في حال وجود أي خلل.',
-      color: 'text-emerald-400',
-      bgColor: 'bg-emerald-400/10 border-emerald-400/20'
     },
     {
       icon: Headphones,
@@ -57,8 +50,8 @@ export const TrustSection: React.FC = () => {
           </p>
         </div>
 
-        {/* 4 Pillars Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
+        {/* 3 Pillars Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
           {trustPillars.map((item, idx) => {
             const Icon = item.icon;
             return (

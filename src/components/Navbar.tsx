@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { UserProfile } from '../types';
-import { auth, provider, signInWithPopup, signOut } from '../firebase';
+import { auth, signOut } from '../firebase';
 import { ShieldCheck, LogOut, Trophy, Heart, Shield } from 'lucide-react';
 
 interface NavbarProps {
@@ -10,7 +10,9 @@ interface NavbarProps {
   isAdmin?: boolean;
   onOpenWishlist: () => void;
   onOpenAdmin?: () => void;
+  onInitiateSignIn: () => void;
   onSignOut: () => void;
+  authError?: string | null;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -20,30 +22,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   isAdmin = false,
   onOpenWishlist,
   onOpenAdmin,
-  onSignOut
+  onInitiateSignIn,
+  onSignOut,
+  authError
 }) => {
-  const [isSigningIn, setIsSigningIn] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
-
-  const handleGoogleSignIn = async () => {
-    try {
-      setIsSigningIn(true);
-      setAuthError(null);
-      await signInWithPopup(auth, provider);
-    } catch (err: unknown) {
-      const error = err as { code?: string; message?: string };
-      if (error?.code === 'auth/popup-closed-by-user') {
-        // User closed popup
-      } else if (error?.code === 'auth/popup-blocked') {
-        setAuthError('يرجى السماح بالنوافذ المنبثقة لتسجيل الدخول.');
-      } else {
-        setAuthError('تعذر تسجيل الدخول حالياً، يرجى المحاولة مرة أخرى.');
-      }
-    } finally {
-      setIsSigningIn(false);
-    }
-  };
-
   const handleSignOutClick = async () => {
     try {
       await signOut(auth);
@@ -100,7 +82,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </a>
         </nav>
 
-        {/* Zone 3 (Left in RTL): Wishlist & Google Sign-in */}
+        {/* Zone 3 (Left in RTL): Wishlist, Admin & Google Sign-in */}
         <div className="flex items-center gap-2.5">
           
           {/* Wishlist Button */}
@@ -168,9 +150,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           ) : (
             <button
-              onClick={handleGoogleSignIn}
-              disabled={isSigningIn}
-              className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-slate-900 bg-white hover:bg-slate-100 active:scale-95 rounded-xl transition-all duration-150 shadow-md shadow-white/10 border border-slate-200"
+              onClick={onInitiateSignIn}
+              className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-slate-900 bg-white hover:bg-slate-100 active:scale-95 rounded-xl transition-all duration-150 shadow-md shadow-white/10 border border-slate-200 cursor-pointer"
             >
               <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -178,10 +159,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
               </svg>
-              <span className="whitespace-nowrap font-medium text-slate-800 hidden xs:inline">
-                {isSigningIn ? 'جارٍ الدخول...' : 'تسجيل الدخول'}
+              <span className="whitespace-nowrap font-bold text-slate-900 hidden xs:inline">
+                متابعة باستخدام Google
               </span>
-              <span className="whitespace-nowrap font-medium text-slate-800 xs:hidden">
+              <span className="whitespace-nowrap font-bold text-slate-900 xs:hidden">
                 دخول
               </span>
             </button>

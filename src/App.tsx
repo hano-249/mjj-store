@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { auth, onAuthStateChanged, db } from './firebase';
+import { auth, onAuthStateChanged, provider, signInWithPopup, db } from './firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { UserProfile, EFootballAccount, FilterState, CustomerOrder } from './types';
+import { UserProfile, EFootballAccount, FilterState } from './types';
 import { Navbar } from './components/Navbar';
 import { HeroBanner } from './components/HeroBanner';
 import { FilterBar } from './components/FilterBar';
@@ -10,30 +10,41 @@ import { AccountDetailsModal } from './components/AccountDetailsModal';
 import { BuyModal } from './components/BuyModal';
 import { WishlistDrawer } from './components/WishlistDrawer';
 import { SecretAdminPage } from './pages/SecretAdminPage';
+import { TermsPage } from './pages/TermsPage';
+import { PrivacyPage } from './pages/PrivacyPage';
+import { TermsConsentModal } from './components/TermsConsentModal';
 import { TrustSection } from './components/TrustSection';
 import { PaymentMethodsSection } from './components/PaymentMethodsSection';
 import { FaqSection } from './components/FaqSection';
 import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { Footer } from './components/Footer';
-import { Trophy, Flame, RotateCcw, Heart, X, ShieldAlert } from 'lucide-react';
+import { Trophy, Flame, RotateCcw, Heart, X } from 'lucide-react';
 
 const ADMIN_UIDS = [
   'mRqhzZ06Lr012QFgYA1zHw4I8o72',
   'mRqhzZO6LrO12QFgYA1zHw4I8o72'
 ];
 
-const isAdminPath = () => {
-  if (typeof window === 'undefined') return false;
+type RouteState = 'store' | 'admin' | 'terms' | 'privacy';
+
+const getCurrentRoute = (): RouteState => {
+  if (typeof window === 'undefined') return 'store';
   const p = window.location.pathname.replace(/\/+$/, '');
   const h = window.location.hash.replace(/\/+$/, '');
-  return (
+
+  if (p === '/terms' || h === '#/terms' || h === '#terms') return 'terms';
+  if (p === '/privacy' || h === '#/privacy' || h === '#privacy') return 'privacy';
+  if (
     p === '/mj-khalid-77' ||
     p === '/mj-khalid-77-store-2026' ||
     h === '#/mj-khalid-77' ||
     h === '#/mj-khalid-77-store-2026' ||
     h === '#mj-khalid-77' ||
     h === '#mj-khalid-77-store-2026'
-  );
+  ) {
+    return 'admin';
+  }
+  return 'store';
 };
 
 export default function App() {
@@ -41,7 +52,7 @@ export default function App() {
   const [loadingAuth, setLoadingAuth] = useState(true);
 
   // Route state
-  const [isAdminRoute, setIsAdminRoute] = useState<boolean>(() => isAdminPath());
+  const [currentRoute, setCurrentRoute] = useState<RouteState>(() => getCurrentRoute());
 
   // Accounts state - loaded from Firestore collection 'accounts'
   const [accounts, setAccounts] = useState<EFootballAccount[]>([]);
@@ -52,6 +63,11 @@ export default function App() {
   const [selectedBuyAccount, setSelectedBuyAccount] = useState<EFootballAccount | null>(null);
   const [isWishlistOpen, setIsWishlistOpen] = useState(false);
   const [wishlistToast, setWishlistToast] = useState<string | null>(null);
+
+  // Terms & Privacy Consent Modal State for Google Sign In
+  const [isConsentModalOpen, setIsConsentModalOpen] = useState(false);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Wishlist IDs per user
   const [wishlistIds, setWishlistIds] = useState<string[]>([]);
@@ -66,7 +82,7 @@ export default function App() {
   // Listen to popstate and hashchange for URL changes
   useEffect(() => {
     const handleRouteChange = () => {
-      setIsAdminRoute(isAdminPath());
+      setCurrentRoute(getCurrentRoute());
     };
     window.addEventListener('popstate', handleRouteChange);
     window.addEventListener('hashchange', handleRouteChange);
@@ -76,14 +92,54 @@ export default function App() {
     };
   }, []);
 
-  const navigateToAdmin = () => {
-    window.history.pushState({}, '', '/mj-khalid-77');
-    setIsAdminRoute(true);
+  const navigateToStore = () => {
+    window.history.pushState({}, '', '/');
+    setCurrentRoute('store');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const navigateBackToStore = () => {
-    window.history.pushState({}, '', '/');
-    setIsAdminRoute(false);
+  const navigateToTerms = () => {
+    window.history.pushState({}, '', '/terms');
+    setCurrentRoute('terms');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const navigateToPrivacy = () => {
+    window.history.pushState({}, '', '/privacy');
+    setCurrentRoute('privacy');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const navigateToAdmin = () => {
+    window.history.pushState({}, '', '/mj-khalid-77');
+    setCurrentRoute('admin');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Google Sign In with Terms Consent flow
+  const handleInitiateGoogleSignIn = () => {
+    setAuthError(null);
+    setIsConsentModalOpen(true);
+  };
+
+  const handleAgreeAndContinueGoogleSignIn = async () => {
+    try {
+      setIsSigningIn(true);
+      setAuthError(null);
+      await signInWithPopup(auth, provider);
+      setIsConsentModalOpen(false);
+    } catch (err: unknown) {
+      const error = err as { code?: string; message?: string };
+      if (error?.code === 'auth/popup-closed-by-user') {
+        // User closed popup
+      } else if (error?.code === 'auth/popup-blocked') {
+        setAuthError('يرجى السماح بالنوافذ المنبثقة لإتمام تسجيل الدخول.');
+      } else {
+        setAuthError('تعذر تسجيل الدخول حالياً، يرجى المحاولة لاحقاً.');
+      }
+    } finally {
+      setIsSigningIn(false);
+    }
   };
 
   // Listen to Firebase auth state
@@ -194,6 +250,7 @@ export default function App() {
   const handleToggleWishlist = (account: EFootballAccount) => {
     if (!user) {
       showNotification('يرجى تسجيل الدخول أولاً لإضافة الحساب إلى قائمة الرغبات الخاصة بك.');
+      handleInitiateGoogleSignIn();
       return;
     }
 
@@ -276,9 +333,18 @@ export default function App() {
   // Security Check: Is the user an authenticated admin?
   const isAuthorizedAdmin = Boolean(user && ADMIN_UIDS.includes(user.uid));
 
-  // Route Handling for Secret Admin Paths (/mj-khalid-77, /mj-khalid-77-store-2026)
-  if (isAdminRoute) {
-    // If not authenticated or not the verified admin: render a pure standard 404 (No leaks)
+  // 1. Terms Page Route
+  if (currentRoute === 'terms') {
+    return <TermsPage onBackToStore={navigateToStore} />;
+  }
+
+  // 2. Privacy Policy Page Route
+  if (currentRoute === 'privacy') {
+    return <PrivacyPage onBackToStore={navigateToStore} />;
+  }
+
+  // 3. Secret Admin Route
+  if (currentRoute === 'admin') {
     if (!isAuthorizedAdmin) {
       return (
         <div className="min-h-screen bg-[#050811] text-slate-100 flex flex-col items-center justify-center p-6 text-center font-['Cairo',sans-serif]">
@@ -289,7 +355,7 @@ export default function App() {
               عذراً، الصفحة التي تبحث عنها غير متوفرة أو ربما تم تغيير مسارها.
             </p>
             <button
-              onClick={navigateBackToStore}
+              onClick={navigateToStore}
               className="px-6 py-2.5 rounded-xl bg-amber-400 text-slate-950 font-bold text-xs hover:bg-amber-300 transition-colors"
             >
               العودة للمتجر الرئيسي
@@ -299,16 +365,16 @@ export default function App() {
       );
     }
 
-    // If verified admin: Render the Admin Page
     return (
       <SecretAdminPage
         user={user!}
-        onBackToStore={navigateBackToStore}
+        onBackToStore={navigateToStore}
         onSignOut={handleSignOut}
       />
     );
   }
 
+  // 4. Main Store View
   return (
     <div className="min-h-screen bg-[#050811] text-slate-100 flex flex-col selection:bg-amber-500 selection:text-black">
       {/* Toast Notification */}
@@ -335,7 +401,9 @@ export default function App() {
         isAdmin={isAuthorizedAdmin}
         onOpenWishlist={() => setIsWishlistOpen(true)}
         onOpenAdmin={isAuthorizedAdmin ? navigateToAdmin : undefined}
+        onInitiateSignIn={handleInitiateGoogleSignIn}
         onSignOut={handleSignOut}
+        authError={authError}
       />
 
       {/* Hero Banner */}
@@ -441,7 +509,10 @@ export default function App() {
       <FaqSection />
 
       {/* Footer */}
-      <Footer />
+      <Footer 
+        onNavigateToTerms={navigateToTerms}
+        onNavigateToPrivacy={navigateToPrivacy}
+      />
 
       {/* Floating WhatsApp Button */}
       <FloatingWhatsApp onChatClick={() => handleOpenWhatsApp()} />
@@ -476,6 +547,16 @@ export default function App() {
         account={selectedBuyAccount}
         user={user}
         onClose={() => setSelectedBuyAccount(null)}
+      />
+
+      {/* Terms & Privacy Consent Modal before Google Sign In */}
+      <TermsConsentModal
+        isOpen={isConsentModalOpen}
+        onClose={() => setIsConsentModalOpen(false)}
+        onAgreeAndContinue={handleAgreeAndContinueGoogleSignIn}
+        onNavigateToTerms={navigateToTerms}
+        onNavigateToPrivacy={navigateToPrivacy}
+        isSigningIn={isSigningIn}
       />
     </div>
   );

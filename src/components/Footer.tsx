@@ -1,7 +1,26 @@
 import React from 'react';
-import { ShieldCheck, MessageCircle } from 'lucide-react';
+import { ShieldCheck, MessageCircle, FileText, Lock } from 'lucide-react';
 
-export const Footer: React.FC = () => {
+interface FooterProps {
+  onNavigateToTerms?: () => void;
+  onNavigateToPrivacy?: () => void;
+}
+
+export const Footer: React.FC<FooterProps> = ({ onNavigateToTerms, onNavigateToPrivacy }) => {
+  const handleTermsClick = (e: React.MouseEvent) => {
+    if (onNavigateToTerms) {
+      e.preventDefault();
+      onNavigateToTerms();
+    }
+  };
+
+  const handlePrivacyClick = (e: React.MouseEvent) => {
+    if (onNavigateToPrivacy) {
+      e.preventDefault();
+      onNavigateToPrivacy();
+    }
+  };
+
   return (
     <footer className="bg-[#040712] border-t border-slate-800 text-slate-400 text-xs py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -27,19 +46,26 @@ export const Footer: React.FC = () => {
 
           {/* Quick links */}
           <div>
-            <h4 className="text-sm font-bold text-white mb-3">روابط سريعة</h4>
+            <h4 className="text-sm font-bold text-white mb-3">روابط هامة</h4>
             <ul className="space-y-2">
               <li>
                 <a href="#accounts" className="hover:text-amber-400 transition-colors">الحسابات المتاحة</a>
               </li>
               <li>
-                <a href="#why-trust" className="hover:text-amber-400 transition-colors">ضمان استرجاع الأموال</a>
+                <a href="/terms" onClick={handleTermsClick} className="hover:text-amber-400 transition-colors text-amber-300 font-semibold">
+                  شروط الاستخدام وسياسة البيع
+                </a>
+              </li>
+              <li>
+                <a href="/privacy" onClick={handlePrivacyClick} className="hover:text-amber-400 transition-colors text-amber-300 font-semibold">
+                  سياسة الخصوصية
+                </a>
               </li>
               <li>
                 <a href="#payment-methods" className="hover:text-amber-400 transition-colors">طرق الدفع (بنكك، أوكاش، ماي كاشي، برافو)</a>
               </li>
               <li>
-                <a href="#faq" className="hover:text-amber-400 transition-colors">الأسئلة الشائعة حول كونامي</a>
+                <a href="#faq" className="hover:text-amber-400 transition-colors">الأسئلة الشائعة</a>
               </li>
             </ul>
           </div>
@@ -74,13 +100,29 @@ export const Footer: React.FC = () => {
 
         </div>
 
-        {/* Bottom copyright bar */}
+        {/* Bottom copyright & policies bar */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-500 text-[11px]">
           <div>
             جميع الحقوق محفوظة &copy; {new Date().getFullYear()} <strong className="text-slate-300">MJ STORE</strong>. لعبة eFootball وشعاراتها علامات تجارية تابعة لشركة Konami Digital Entertainment.
           </div>
+
+          {/* Policy Links in Footer */}
           <div className="flex items-center gap-3 text-slate-400">
-            <span>صُمم بأعلى معايير الجودة للاعبي السودان والعالم العربي</span>
+            <a 
+              href="/terms" 
+              onClick={handleTermsClick} 
+              className="hover:text-amber-400 transition-colors font-medium text-slate-300"
+            >
+              شروط الاستخدام
+            </a>
+            <span className="text-slate-700">|</span>
+            <a 
+              href="/privacy" 
+              onClick={handlePrivacyClick} 
+              className="hover:text-amber-400 transition-colors font-medium text-slate-300"
+            >
+              سياسة الخصوصية
+            </a>
           </div>
         </div>
 
