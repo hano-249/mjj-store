@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { auth, signOut, db } from '../firebase';
+import React, { useState, useEffect, useRef } from 'react';
+import { auth, signOut, db, storage, ref, uploadBytesResumable, getDownloadURL } from '../firebase';
 import { 
   collection, 
   addDoc, 
@@ -10,8 +10,7 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { 
-  Plus, 
-  Edit3, 
+  Upload, 
   Trash2, 
   CheckCircle2, 
   Clock, 
@@ -21,22 +20,27 @@ import {
   MessageCircle, 
   LogOut, 
   ArrowLeft, 
-  Eye, 
-  EyeOff, 
-  Check
+  X, 
+  Tag, 
+  Star, 
+  Image as ImageIcon,
+  Check,
+  AlertCircle,
+  Edit2
 } from 'lucide-react';
 import { UserProfile } from '../types';
+import { compressSquadImage } from '../utils/imageCompressor';
+
+export type AccountStatus = 'متاح' | 'محجوز' | 'مباع';
 
 export interface FirestoreAccount {
   id?: string;
-  game: string;
-  title: string;
-  price: number;
-  description: string;
-  image: string;
-  username: string;
-  password?: string;
-  sold: boolean;
+  title: string;              // عنوان الحساب
+  price: number;              // السعر بالجنيه السوداني
+  description: string;        // وصف التشكيلة
+  rating: string | number;    // التقييم (مثال: 3150 أو 5/5)
+  status: AccountStatus;      // حالة الحساب: متاح / محجوز / مباع
+  image: string;              // رابط صورة التشكيلة من Firebase Storage (mj-squads/)
   createdAt?: unknown;
 }
 
@@ -57,36 +61,43 @@ interface SecretAdminPageProps {
 }
 
 export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore, onSignOut }) => {
-  // Firestore Data State
+  // Data State
   const [accounts, setAccounts] = useState<FirestoreAccount[]>([]);
   const [orders, setOrders] = useState<FirestoreOrder[]>([]);
   const [loadingData, setLoadingData] = useState(true);
 
-  // Password visibility map
-  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
-
-  // Editing state
-  const [editingAccount, setEditingAccount] = useState<FirestoreAccount | null>(null);
-  const [submittingForm, setSubmittingForm] = useState(false);
-
-  // Form Fields
-  const [formGame, setFormGame] = useState('eFootball 2026');
+  // Form Fields (Safe manual data: NO username, NO password, NO email)
   const [formTitle, setFormTitle] = useState('');
   const [formPrice, setFormPrice] = useState<number | ''>('');
   const [formDescription, setFormDescription] = useState('');
-  const [formImage, setFormImage] = useState('/src/assets/images/squad_showcase_legends_1790969434039.jpg');
-  const [formUsername, setFormUsername] = useState('');
-  const [formPassword, setFormPassword] = useState('');
+  const [formRating, setFormRating] = useState('3150');
+  const [formStatus, setFormStatus] = useState<AccountStatus>('متاح');
+
+  // Image Upload & Compression State
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [imageSizeKB, setImageSizeKB] = useState<number | null>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [submittingForm, setSubmittingForm] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Quick Edit Modal: تعديل السعر والحالة فقط
+  const [editingAccount, setEditingAccount] = useState<FirestoreAccount | null>(null);
+  const [editPrice, setEditPrice] = useState<number | ''>('');
+  const [editStatus, setEditStatus] = useState<AccountStatus>('متاح');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   // Search & Filter
   const [searchAccount, setSearchAccount] = useState('');
+  const [filterAccountStatus, setFilterAccountStatus] = useState<'all' | AccountStatus>('all');
   const [searchOrder, setSearchOrder] = useState('');
-  const [filterAccountSold, setFilterAccountSold] = useState<'all' | 'available' | 'sold'>('all');
 
   // Real-time Firestore sync
   useEffect(() => {
     setLoadingData(true);
-
     let unsubAccounts = () => {};
     let unsubOrders = () => {};
 
@@ -97,7 +108,23 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
         (snapshot) => {
           const list: FirestoreAccount[] = [];
           snapshot.forEach((d) => {
-            list.push({ id: d.id, ...(d.data() as Omit<FirestoreAccount, 'id'>) });
+            const data = d.data();
+            // Determine status fallback
+            let statusVal: AccountStatus = 'متاح';
+            if (data.status === 'محجوز') statusVal = 'محجوز';
+            else if (data.status === 'مباع' || data.sold === true) statusVal = 'مباع';
+            else if (data.status === 'متاح') statusVal = 'متاح';
+
+            list.push({
+              id: d.id,
+              title: data.title || '',
+              price: Number(data.price) || 0,
+              description: data.description || '',
+              rating: data.rating || data.teamStrength || '3150',
+              status: statusVal,
+              image: data.image || '',
+              createdAt: data.createdAt
+            });
           });
           setAccounts(list);
           setLoadingData(false);
@@ -129,77 +156,136 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
     };
   }, []);
 
-  const handleSignOutClick = async () => {
+  // Handle Image File Selection with client-side Canvas Compression < 400KB
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadError(null);
+    setIsCompressing(true);
+    setUploadProgress(0);
+    setUploadedImageUrl(null);
+
     try {
-      await signOut(auth);
-    } catch {
-      // ignore
+      // 1. Client-side compression to under 400KB (target ~380KB)
+      const compressed = await compressSquadImage(file, 390);
+      setImagePreviewUrl(compressed.previewUrl);
+      setImageSizeKB(compressed.sizeKB);
+      setIsCompressing(false);
+
+      // 2. Upload to Firebase Storage path: mj-squads/
+      setIsUploading(true);
+      const cleanFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const storagePath = `mj-squads/${Date.now()}_${cleanFileName}`;
+      const storageRef = ref(storage, storagePath);
+
+      const uploadTask = uploadBytesResumable(storageRef, compressed.blob, {
+        contentType: 'image/jpeg'
+      });
+
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          const progress = Math.round(
+            (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+          );
+          setUploadProgress(progress);
+        },
+        (error) => {
+          setIsUploading(false);
+          setUploadError('فشل رفع الصورة إلى التخزين السحابي: ' + error.message);
+        },
+        async () => {
+          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+          setUploadedImageUrl(downloadUrl);
+          setIsUploading(false);
+        }
+      );
+    } catch (err: unknown) {
+      setIsCompressing(false);
+      setIsUploading(false);
+      setUploadError(err instanceof Error ? err.message : 'حدث خطأ أثناء معالجة الصورة');
     }
-    onSignOut();
-    onBackToStore();
   };
 
-  // Form submit: add or edit account in Firestore 'accounts'
+  // Delete image preview before saving
+  const handleDeleteImagePreview = () => {
+    setImagePreviewUrl(null);
+    setImageSizeKB(null);
+    setUploadedImageUrl(null);
+    setUploadProgress(0);
+    setUploadError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Submit Add Account (NO credentials stored anywhere)
   const handleSubmitAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle || !formPrice) return;
+    if (!uploadedImageUrl) {
+      setUploadError('يرجى رفع صورة التشكيلة أولاً قبل حفظ الحساب');
+      return;
+    }
 
     setSubmittingForm(true);
 
-    const accountData: Omit<FirestoreAccount, 'id'> = {
-      game: formGame || 'eFootball 2026',
-      title: formTitle,
-      price: Number(formPrice),
-      description: formDescription,
-      image: formImage || '/src/assets/images/squad_showcase_legends_1790969434039.jpg',
-      username: formUsername,
-      password: formPassword,
-      sold: editingAccount ? editingAccount.sold : false,
-      createdAt: serverTimestamp()
-    };
-
     try {
-      if (editingAccount && editingAccount.id) {
-        const docRef = doc(db, 'accounts', editingAccount.id);
-        await updateDoc(docRef, {
-          game: accountData.game,
-          title: accountData.title,
-          price: accountData.price,
-          description: accountData.description,
-          image: accountData.image,
-          username: accountData.username,
-          password: accountData.password
-        });
-      } else {
-        await addDoc(collection(db, 'accounts'), accountData);
-      }
+      const accountData: Omit<FirestoreAccount, 'id'> = {
+        title: formTitle.trim(),
+        price: Number(formPrice),
+        description: formDescription.trim(),
+        rating: formRating.trim() || '3150',
+        status: formStatus,
+        image: uploadedImageUrl,
+        createdAt: serverTimestamp()
+      };
 
-      // Reset Form
+      await addDoc(collection(db, 'accounts'), accountData);
+
+      // Reset form
       setFormTitle('');
       setFormPrice('');
       setFormDescription('');
-      setFormUsername('');
-      setFormPassword('');
-      setEditingAccount(null);
-    } catch {
-      // handled
+      setFormRating('3150');
+      setFormStatus('متاح');
+      handleDeleteImagePreview();
+    } catch (err: unknown) {
+      setUploadError(err instanceof Error ? err.message : 'فشل حفظ الحساب في قاعدة البيانات');
     } finally {
       setSubmittingForm(false);
     }
   };
 
-  // Toggle sold status in Firestore
-  const handleToggleSold = async (acc: FirestoreAccount) => {
-    if (!acc.id) return;
+  // Open Quick Edit Modal (تعديل السعر والحالة فقط)
+  const handleOpenQuickEdit = (acc: FirestoreAccount) => {
+    setEditingAccount(acc);
+    setEditPrice(acc.price);
+    setEditStatus(acc.status);
+  };
+
+  // Save Quick Edit (السعر والحالة فقط)
+  const handleSaveQuickEdit = async () => {
+    if (!editingAccount || !editingAccount.id || !editPrice) return;
+    setSavingEdit(true);
+
     try {
-      const docRef = doc(db, 'accounts', acc.id);
-      await updateDoc(docRef, { sold: !acc.sold });
+      const docRef = doc(db, 'accounts', editingAccount.id);
+      await updateDoc(docRef, {
+        price: Number(editPrice),
+        status: editStatus,
+        sold: editStatus === 'مباع'
+      });
+      setEditingAccount(null);
     } catch {
       // handled
+    } finally {
+      setSavingEdit(false);
     }
   };
 
-  // Delete account from Firestore
+  // Delete account
   const handleDeleteAccount = async (id?: string) => {
     if (!id) return;
     if (!window.confirm('هل أنت متأكد من حذف هذا الحساب نهائياً؟')) return;
@@ -212,20 +298,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
     }
   };
 
-  // Open edit mode
-  const handleOpenEdit = (acc: FirestoreAccount) => {
-    setEditingAccount(acc);
-    setFormGame(acc.game || 'eFootball 2026');
-    setFormTitle(acc.title);
-    setFormPrice(acc.price);
-    setFormDescription(acc.description || '');
-    setFormImage(acc.image || '/src/assets/images/squad_showcase_legends_1790969434039.jpg');
-    setFormUsername(acc.username || '');
-    setFormPassword(acc.password || '');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  // Update order status in Firestore
+  // Update order status
   const handleUpdateOrderStatus = async (orderId: string, status: string) => {
     try {
       const docRef = doc(db, 'orders', orderId);
@@ -235,26 +308,31 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
     }
   };
 
-  const togglePasswordVisibility = (id?: string) => {
-    if (!id) return;
-    setVisiblePasswords((prev) => ({ ...prev, [id]: !prev[id] }));
+  const handleSignOutClick = async () => {
+    try {
+      await signOut(auth);
+    } catch {
+      // ignore
+    }
+    onSignOut();
+    onBackToStore();
   };
 
   // Stats
-  const availableCount = accounts.filter((a) => !a.sold).length;
-  const soldCount = accounts.filter((a) => a.sold).length;
-  const pendingOrdersCount = orders.filter((o) => o.status === 'معلق' || o.status === 'pending').length;
+  const availableCount = accounts.filter((a) => a.status === 'متاح').length;
+  const reservedCount = accounts.filter((a) => a.status === 'محجوز').length;
+  const soldCount = accounts.filter((a) => a.status === 'مباع').length;
 
-  // Filtered lists
+  // Filtered accounts list
   const filteredAccounts = accounts.filter((acc) => {
-    if (filterAccountSold === 'available' && acc.sold) return false;
-    if (filterAccountSold === 'sold' && !acc.sold) return false;
+    if (filterAccountStatus !== 'all' && acc.status !== filterAccountStatus) {
+      return false;
+    }
     if (searchAccount.trim()) {
       const q = searchAccount.toLowerCase();
       const matchTitle = acc.title.toLowerCase().includes(q);
-      const matchGame = acc.game?.toLowerCase().includes(q);
-      const matchUser = acc.username?.toLowerCase().includes(q);
-      return matchTitle || matchGame || matchUser;
+      const matchDesc = acc.description?.toLowerCase().includes(q);
+      return matchTitle || matchDesc;
     }
     return true;
   });
@@ -281,10 +359,11 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
           </div>
           <div>
             <h1 className="text-base sm:text-lg font-black text-white tracking-wide">
-              لوحة إدارة المتجر
+              لوحة تحكم MJ STORE
             </h1>
-            <p className="text-[11px] text-slate-400">
-              إدارة الحسابات والطلبات الرسمية
+            <p className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" />
+              <span>نظام إدارة آمن 100% (تسليم وبيع يدوي عبر واتساب)</span>
             </p>
           </div>
         </div>
@@ -303,7 +382,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-950/30 border border-red-500/40 text-xs font-bold text-red-300 hover:bg-red-900/40 transition-colors"
           >
             <LogOut className="w-4 h-4" />
-            <span>تسجيل الخروج</span>
+            <span>خروج</span>
           </button>
         </div>
       </div>
@@ -311,14 +390,14 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
       {/* Main Container */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         
-        {/* 1. Statistics Cards */}
+        {/* Statistics Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
           
           {/* Available Accounts */}
-          <div className="bg-gradient-to-br from-[#09112a] to-[#060a1a] border border-amber-500/30 rounded-2xl p-5 shadow-xl">
+          <div className="bg-gradient-to-br from-[#09112a] to-[#060a1a] border border-emerald-500/30 rounded-2xl p-5 shadow-xl">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-amber-400">الحسابات المتاحة</span>
-              <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+              <span className="text-xs font-bold text-emerald-400">الحسابات المتاحة</span>
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
                 <Package className="w-5 h-5" />
               </div>
             </div>
@@ -326,7 +405,23 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
               <span className="text-3xl font-black text-white font-mono tabular-nums">
                 {availableCount}
               </span>
-              <span className="text-xs text-slate-400">حساب معروض</span>
+              <span className="text-xs text-slate-400">حساب متاح للعرض</span>
+            </div>
+          </div>
+
+          {/* Reserved Accounts */}
+          <div className="bg-gradient-to-br from-[#09112a] to-[#060a1a] border border-amber-500/30 rounded-2xl p-5 shadow-xl">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-amber-400">الحسابات المحجوزة</span>
+              <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                <Clock className="w-5 h-5" />
+              </div>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-black text-amber-400 font-mono tabular-nums">
+                {reservedCount}
+              </span>
+              <span className="text-xs text-slate-400">حساب محجوز لعميل</span>
             </div>
           </div>
 
@@ -334,106 +429,57 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
           <div className="bg-gradient-to-br from-[#09112a] to-[#060a1a] border border-slate-800 rounded-2xl p-5 shadow-xl">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-slate-300">الحسابات المباعة</span>
-              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+              <div className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400">
                 <CheckCircle2 className="w-5 h-5" />
               </div>
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-amber-400 font-mono tabular-nums">
+              <span className="text-3xl font-black text-slate-300 font-mono tabular-nums">
                 {soldCount}
               </span>
-              <span className="text-xs text-slate-400">حساب مكتمل</span>
-            </div>
-          </div>
-
-          {/* Pending Orders */}
-          <div className="bg-gradient-to-br from-[#09112a] to-[#060a1a] border border-slate-800 rounded-2xl p-5 shadow-xl">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-slate-300">الطلبات المعلقة</span>
-              <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
-                <Clock className="w-5 h-5" />
-              </div>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-white font-mono tabular-nums">
-                {pendingOrdersCount}
-              </span>
-              <span className="text-xs text-slate-400">طلب قيد المراجعة</span>
+              <span className="text-xs text-slate-400">تم بيعها وتسليمها</span>
             </div>
           </div>
 
         </div>
 
-        {/* 2. Add / Edit Account Form */}
+        {/* 1. فورم إضافة حساب جديد (آمن 100% بدون أي بيانات تسجيل دخول) */}
         <div className="bg-[#070b1a] border border-amber-500/30 rounded-2xl p-6 shadow-2xl">
           <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                <Plus className="w-6 h-6" />
-              </div>
-              <div>
-                <h2 className="text-lg font-black text-white">
-                  {editingAccount ? 'تعديل بيانات الحساب' : 'إضافة حساب جديد'}
-                </h2>
-                <p className="text-xs text-slate-400">
-                  الحفظ المباشر في قاعدة بيانات المتجر
-                </p>
-              </div>
+            <div>
+              <h2 className="text-lg font-black text-white flex items-center gap-2">
+                <Tag className="w-5 h-5 text-amber-400" />
+                <span>إضافة حساب جديد للعرض بالمتجر</span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">
+                (عنوان الحساب - السعر - وصف التشكيلة - التقييم - الحالة) مع رفع صورة التشكيلة المباشرة
+              </p>
             </div>
 
-            {editingAccount && (
-              <button
-                onClick={() => {
-                  setEditingAccount(null);
-                  setFormTitle('');
-                  setFormPrice('');
-                  setFormDescription('');
-                  setFormUsername('');
-                  setFormPassword('');
-                }}
-                className="text-xs text-amber-400 hover:underline"
-              >
-                إلغاء التعديل
-              </button>
-            )}
+            <div className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-lg">
+              🛡️ بدون أي بيانات دخول (آمن)
+            </div>
           </div>
 
-          <form onSubmit={handleSubmitAccount} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <form onSubmit={handleSubmitAccount} className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               
-              {/* 1. اللعبة */}
-              <div>
-                <label className="text-xs font-bold text-slate-300 block mb-1.5">
-                  اللعبة *
-                </label>
-                <select
-                  value={formGame}
-                  onChange={(e) => setFormGame(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400"
-                >
-                  <option value="eFootball 2026">eFootball 2026</option>
-                  <option value="PUBG Mobile">ببجي موبايل (PUBG)</option>
-                  <option value="Free Fire">فري فاير (Free Fire)</option>
-                  <option value="FC Mobile">FC Mobile (فيفا)</option>
-                </select>
-              </div>
-
-              {/* 2. عنوان الحساب */}
-              <div>
+              {/* 1. عنوان الحساب */}
+              <div className="md:col-span-2">
                 <label className="text-xs font-bold text-slate-300 block mb-1.5">
                   عنوان الحساب *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="مثال: حساب ملكي أساطير إبيك قوة 3150"
+                  placeholder="مثال: حساب ملكي أساطير إبيك وشو تايم (ميسي، رونالدو)"
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400"
                 />
               </div>
 
-              {/* 3. السعر بالجنيه السوداني */}
+              {/* 2. السعر (SDG) */}
               <div>
                 <label className="text-xs font-bold text-slate-300 block mb-1.5">
                   السعر بالجنيه السوداني (SDG) *
@@ -449,91 +495,191 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
                 />
               </div>
 
+              {/* 3. التقييم / قوة الفريق */}
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                  التقييم / قوة الفريق
+                </label>
+                <input
+                  type="text"
+                  placeholder="مثال: 3155 أو 5 نجوم"
+                  value={formRating}
+                  onChange={(e) => setFormRating(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               
-              {/* 4. رابط الصورة */}
-              <div>
+              {/* 4. وصف التشكيلة */}
+              <div className="md:col-span-2">
                 <label className="text-xs font-bold text-slate-300 block mb-1.5">
-                  رابط صورة التشكيلة / الحساب
+                  وصف التشكيلة وأبرز اللاعبين والبطاقات
                 </label>
-                <input
-                  type="text"
-                  placeholder="/src/assets/images/... أو رابط"
-                  value={formImage}
-                  onChange={(e) => setFormImage(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400 font-mono dir-ltr text-left"
+                <textarea
+                  rows={3}
+                  placeholder="اكتب أبرز أساطير التشكيلة، حزم الإبيك، والكوينز المتوفرة..."
+                  value={formDescription}
+                  onChange={(e) => setFormDescription(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400"
                 />
               </div>
 
-              {/* 5. اليوزر */}
+              {/* 5. حالة الحساب: متاح / محجوز / مباع */}
               <div>
                 <label className="text-xs font-bold text-slate-300 block mb-1.5">
-                  اليوزر / بريد الحساب الأساسي *
+                  حالة الحساب *
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="بريد تسجيل الدخول"
-                  value={formUsername}
-                  onChange={(e) => setFormUsername(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400 font-mono dir-ltr text-left"
-                />
-              </div>
-
-              {/* 6. الباسورد */}
-              <div>
-                <label className="text-xs font-bold text-slate-300 block mb-1.5">
-                  الباسورد (كلمة المرور) *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="كلمة المرور"
-                  value={formPassword}
-                  onChange={(e) => setFormPassword(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400 font-mono dir-ltr text-left"
-                />
+                <select
+                  value={formStatus}
+                  onChange={(e) => setFormStatus(e.target.value as AccountStatus)}
+                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400 cursor-pointer"
+                >
+                  <option value="متاح">🟢 متاح للبيع</option>
+                  <option value="محجوز">🟡 محجوز لعميل</option>
+                  <option value="مباع">🔴 مباع</option>
+                </select>
+                <span className="text-[11px] text-slate-500 block mt-2 leading-relaxed">
+                  الحسابات المتاحة تظهر للعملاء في المتجر، والمحجوزة تظهر بحالة حجز، والمباعة يتم إخفاؤها تلقائياً.
+                </span>
               </div>
 
             </div>
 
-            {/* 7. الوصف */}
-            <div>
-              <label className="text-xs font-bold text-slate-300 block mb-1.5">
-                الوصف والمواصفات
+            {/* 6. رفع صورة التشكيلة من الجهاز مع ضغط تلقائي أقل من 400KB ورفع إلى Firebase Storage */}
+            <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+              <label className="text-xs font-bold text-white block mb-2">
+                صورة التشكيلة (رفع مباشر من الجهاز إلى Firebase Storage) *
               </label>
-              <textarea
-                rows={2}
-                placeholder="تفاصيل التشكيلة، الأساطير، الكوينز، والضمان..."
-                value={formDescription}
-                onChange={(e) => setFormDescription(e.target.value)}
-                className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400"
+
+              {/* Hidden file input */}
+              <input
+                type="file"
+                accept="image/*"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                className="hidden"
               />
+
+              {!imagePreviewUrl ? (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full py-6 border-2 border-dashed border-slate-700 hover:border-amber-400 rounded-xl flex flex-col items-center justify-center gap-2 text-slate-300 hover:text-white transition-all bg-slate-950/40 hover:bg-slate-900/50"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                      <Upload className="w-5 h-5" />
+                    </div>
+                    <span className="text-xs font-bold">
+                      اضغط هنا لرفع صورة التشكيلة من جهازك
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      (يتم ضغط الصورة تلقائياً لأقل من 400KB لسرعة التصفح)
+                    </span>
+                  </button>
+                </div>
+              ) : (
+                /* Preview + Progress + Delete button */
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row items-center gap-4 p-3 rounded-xl bg-slate-950 border border-slate-800">
+                    <img
+                      src={imagePreviewUrl}
+                      alt="معاينة التشكيلة"
+                      className="w-24 h-24 rounded-lg object-cover border border-slate-700 shrink-0"
+                    />
+
+                    <div className="flex-1 min-w-0 w-full space-y-1.5 text-right">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white">معاينة صورة التشكيلة</span>
+                        {imageSizeKB && (
+                          <span className="text-[11px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
+                            الحجم بعد الضغط: {imageSizeKB} KB (أقل من 400KB ✅)
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Upload Progress Bar */}
+                      {isUploading && (
+                        <div className="w-full space-y-1">
+                          <div className="flex justify-between text-[10px] text-slate-400">
+                            <span>جارٍ الرفع إلى Firebase Storage (mj-squads/)...</span>
+                            <span className="font-mono">{uploadProgress}%</span>
+                          </div>
+                          <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all duration-200"
+                              style={{ width: `${uploadProgress}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {uploadedImageUrl && (
+                        <div className="text-[11px] text-emerald-400 flex items-center gap-1.5 font-semibold">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>تم رفع الصورة بنجاح وحفظها في التخزين السحابي</span>
+                        </div>
+                      )}
+
+                      {isCompressing && (
+                        <div className="text-[11px] text-amber-300">
+                          جارٍ ضغط الصورة بالجودة المثالية...
+                        </div>
+                      )}
+                    </div>
+
+                    {/* زر حذف الصورة قبل الحفظ */}
+                    <button
+                      type="button"
+                      onClick={handleDeleteImagePreview}
+                      className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-red-950/40 border border-red-500/30 text-red-300 hover:bg-red-900/40 text-xs font-bold transition-colors shrink-0"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>حذف الصورة</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {uploadError && (
+                <div className="mt-3 p-3 rounded-lg bg-red-950/50 border border-red-500/40 text-red-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{uploadError}</span>
+                </div>
+              )}
             </div>
 
+            {/* زر حفظ الحساب */}
             <div className="flex justify-end pt-2">
               <button
                 type="submit"
-                disabled={submittingForm}
-                className="px-8 py-3 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
+                disabled={submittingForm || isUploading || isCompressing || !uploadedImageUrl}
+                className="px-8 py-3 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Plus className="w-4 h-4" />
-                <span>{editingAccount ? 'حفظ التعديلات' : 'إضافة الحساب للمتجر'}</span>
+                <Tag className="w-4 h-4" />
+                <span>
+                  {submittingForm
+                    ? 'جارٍ الحفظ...'
+                    : isUploading
+                    ? 'جارٍ رفع الصورة...'
+                    : 'إضافة الحساب للمتجر'}
+                </span>
               </button>
             </div>
 
           </form>
         </div>
 
-        {/* 3. Accounts Table */}
+        {/* 2. جدول الحسابات بالداش بورد (صور وسعر وتعديل السعر والحالة فقط) */}
         <div className="bg-[#070b1a] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
           <div className="p-5 border-b border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div>
               <h3 className="text-base font-black text-white flex items-center gap-2">
                 <Package className="w-4 h-4 text-amber-400" />
-                <span>جدول كافة الحسابات</span>
+                <span>قائمة الحسابات المعروضة في المتجر</span>
               </h3>
               <span className="text-xs text-slate-400">
                 إجمالي الحسابات: {accounts.length}
@@ -553,30 +699,17 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
               </div>
 
               <div className="flex items-center p-1 bg-slate-900 rounded-lg border border-slate-800 text-xs">
-                <button
-                  onClick={() => setFilterAccountSold('all')}
-                  className={`px-2.5 py-1 rounded transition-colors ${
-                    filterAccountSold === 'all' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400'
-                  }`}
-                >
-                  الكل
-                </button>
-                <button
-                  onClick={() => setFilterAccountSold('available')}
-                  className={`px-2.5 py-1 rounded transition-colors ${
-                    filterAccountSold === 'available' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400'
-                  }`}
-                >
-                  متاح
-                </button>
-                <button
-                  onClick={() => setFilterAccountSold('sold')}
-                  className={`px-2.5 py-1 rounded transition-colors ${
-                    filterAccountSold === 'sold' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400'
-                  }`}
-                >
-                  مباع
-                </button>
+                {(['all', 'متاح', 'محجوز', 'مباع'] as const).map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => setFilterAccountStatus(st)}
+                    className={`px-2.5 py-1 rounded transition-colors ${
+                      filterAccountStatus === st ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400'
+                    }`}
+                  >
+                    {st === 'all' ? 'الكل' : st}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -585,10 +718,10 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
             <table className="w-full text-right text-xs">
               <thead className="bg-[#050813] text-slate-400 border-b border-slate-800">
                 <tr>
-                  <th className="p-3.5">اللعبة والحساب</th>
+                  <th className="p-3.5">صورة التشكيلة</th>
+                  <th className="p-3.5">عنوان الحساب</th>
                   <th className="p-3.5">السعر (SDG)</th>
-                  <th className="p-3.5">اليوزر</th>
-                  <th className="p-3.5">الباسورد</th>
+                  <th className="p-3.5">التقييم</th>
                   <th className="p-3.5">الحالة</th>
                   <th className="p-3.5 text-center">الإجراءات</th>
                 </tr>
@@ -601,98 +734,98 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
                     </td>
                   </tr>
                 ) : filteredAccounts.length > 0 ? (
-                  filteredAccounts.map((acc) => {
-                    const isPwdVisible = acc.id ? visiblePasswords[acc.id] : false;
-                    return (
-                      <tr key={acc.id} className="hover:bg-slate-900/40 transition-colors">
-                        <td className="p-3.5">
-                          <div className="flex items-center gap-3">
+                  filteredAccounts.map((acc) => (
+                    <tr key={acc.id} className="hover:bg-slate-900/40 transition-colors">
+                      
+                      {/* صورة التشكيلة */}
+                      <td className="p-3.5">
+                        <div className="w-14 h-14 rounded-lg overflow-hidden border border-slate-700 bg-slate-900 shrink-0">
+                          {acc.image ? (
                             <img
-                              src={acc.image || '/src/assets/images/squad_showcase_legends_1790969434039.jpg'}
+                              src={acc.image}
                               alt={acc.title}
                               referrerPolicy="no-referrer"
-                              className="w-11 h-11 rounded-lg object-cover border border-slate-700 shrink-0"
+                              className="w-full h-full object-cover"
                             />
-                            <div>
-                              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
-                                {acc.game || 'eFootball 2026'}
-                              </span>
-                              <span className="font-bold text-white block max-w-xs truncate">{acc.title}</span>
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-slate-600">
+                              <ImageIcon className="w-6 h-6" />
                             </div>
-                          </div>
-                        </td>
+                          )}
+                        </div>
+                      </td>
 
-                        <td className="p-3.5">
-                          <span className="font-bold text-amber-400 font-mono text-sm block tabular-nums">
-                            {Number(acc.price).toLocaleString()} SDG
+                      {/* عنوان الحساب */}
+                      <td className="p-3.5">
+                        <span className="font-bold text-white block max-w-sm truncate text-sm">
+                          {acc.title}
+                        </span>
+                        {acc.description && (
+                          <span className="text-[11px] text-slate-400 block truncate max-w-sm mt-0.5">
+                            {acc.description}
                           </span>
-                        </td>
+                        )}
+                      </td>
 
-                        <td className="p-3.5 font-mono text-slate-300 dir-ltr text-left">
-                          {acc.username || '—'}
-                        </td>
+                      {/* السعر */}
+                      <td className="p-3.5">
+                        <span className="font-black text-amber-400 font-mono text-base block tabular-nums">
+                          {Number(acc.price).toLocaleString()} SDG
+                        </span>
+                      </td>
 
-                        <td className="p-3.5 font-mono dir-ltr text-left">
-                          <div className="flex items-center gap-2">
-                            <span className="text-slate-300">
-                              {isPwdVisible ? acc.password : '••••••••'}
-                            </span>
-                            <button
-                              onClick={() => togglePasswordVisibility(acc.id)}
-                              className="p-1 text-slate-500 hover:text-slate-200 transition-colors"
-                            >
-                              {isPwdVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                            </button>
-                          </div>
-                        </td>
+                      {/* التقييم */}
+                      <td className="p-3.5">
+                        <span className="inline-flex items-center gap-1 font-mono text-xs text-blue-300 font-bold bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded">
+                          <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                          <span>{acc.rating || '3150'}</span>
+                        </span>
+                      </td>
 
-                        <td className="p-3.5">
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold ${
-                            acc.sold
-                              ? 'bg-red-500/15 text-red-300 border border-red-500/30'
-                              : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                          }`}>
-                            {acc.sold ? 'مباع' : 'متاح للبيع'}
-                          </span>
-                        </td>
+                      {/* الحالة */}
+                      <td className="p-3.5">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold ${
+                            acc.status === 'متاح'
+                              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                              : acc.status === 'محجوز'
+                              ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                              : 'bg-red-500/15 text-red-300 border border-red-500/30'
+                          }`}
+                        >
+                          {acc.status === 'متاح' && '🟢 متاح'}
+                          {acc.status === 'محجوز' && '🟡 محجوز'}
+                          {acc.status === 'مباع' && '🔴 مباع'}
+                        </span>
+                      </td>
 
-                        <td className="p-3.5">
-                          <div className="flex items-center justify-center gap-2">
-                            <button
-                              onClick={() => handleToggleSold(acc)}
-                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-colors ${
-                                acc.sold
-                                  ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                                  : 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-600/30'
-                              }`}
-                            >
-                              {acc.sold ? 'إعادة للإتاحة' : 'تم بيعه'}
-                            </button>
+                      {/* زر تعديل السعر والحالة فقط + حذف */}
+                      <td className="p-3.5 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => handleOpenQuickEdit(acc)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-400/10 border border-amber-400/30 text-amber-300 hover:bg-amber-400/20 text-xs font-bold transition-colors"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                            <span>تعديل السعر والحالة</span>
+                          </button>
 
-                            <button
-                              onClick={() => handleOpenEdit(acc)}
-                              className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-amber-400 hover:bg-slate-700 transition-colors"
-                              title="تعديل"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
+                          <button
+                            onClick={() => handleDeleteAccount(acc.id)}
+                            className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                            title="حذف الحساب"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
 
-                            <button
-                              onClick={() => handleDeleteAccount(acc.id)}
-                              className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                              title="حذف"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
+                    </tr>
+                  ))
                 ) : (
                   <tr>
                     <td colSpan={6} className="p-8 text-center text-slate-400">
-                      لا توجد حسابات مسجلة في قاعدة البيانات حالياً. يمكنك إضافة أول حساب أعلاه.
+                      لا توجد حسابات مسجلة في قاعدة البيانات حالياً. أضف أول حساب من النموذج أعلاه.
                     </td>
                   </tr>
                 )}
@@ -701,13 +834,13 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
           </div>
         </div>
 
-        {/* 4. Orders Table */}
+        {/* 3. جدول الطلبات (التواصل والبيع يدوي عبر واتساب خارج الموقع) */}
         <div className="bg-[#070b1a] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
           <div className="p-5 border-b border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div>
               <h3 className="text-base font-black text-white flex items-center gap-2">
                 <ShoppingBag className="w-4 h-4 text-amber-400" />
-                <span>جدول الطلبات المستلمة</span>
+                <span>طلبات الشراء المستلمة (التواصل والتسليم يدوي عبر واتساب)</span>
               </h3>
               <span className="text-xs text-slate-400">
                 إجمالي الطلبات: {orders.length}
@@ -731,11 +864,11 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
               <thead className="bg-[#050813] text-slate-400 border-b border-slate-800">
                 <tr>
                   <th className="p-3.5">اسم العميل</th>
-                  <th className="p-3.5">واتساب</th>
+                  <th className="p-3.5">رقم واتساب</th>
                   <th className="p-3.5">الحساب المطلوب</th>
                   <th className="p-3.5">السعر</th>
-                  <th className="p-3.5">الحالة</th>
-                  <th className="p-3.5 text-center">التواصل والتسليم</th>
+                  <th className="p-3.5">حالة الطلب</th>
+                  <th className="p-3.5 text-center">التواصل والتسليم اليدوي</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/80">
@@ -785,7 +918,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-colors"
                           >
                             <MessageCircle className="w-3.5 h-3.5" />
-                            <span>فتح واتساب</span>
+                            <span>محادثة واتساب للتسليم اليدوي</span>
                           </a>
                         </td>
                       </tr>
@@ -804,6 +937,80 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
         </div>
 
       </div>
+
+      {/* Modal: تعديل السعر والحالة فقط */}
+      {editingAccount && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="relative w-full max-w-md bg-[#0a0f24] border border-amber-500/40 rounded-2xl shadow-2xl p-6 text-right">
+            
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Edit2 className="w-4 h-4 text-amber-400" />
+                <span>تعديل السعر والحالة فقط</span>
+              </h3>
+              <button
+                onClick={() => setEditingAccount(null)}
+                className="p-1 text-slate-400 hover:text-white rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 font-bold mb-4 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
+              {editingAccount.title}
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                  السعر الجديد بالجنيه السوداني (SDG) *
+                </label>
+                <input
+                  type="number"
+                  min="1000"
+                  value={editPrice}
+                  onChange={(e) => setEditPrice(Number(e.target.value))}
+                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-amber-400 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                  حالة الحساب *
+                </label>
+                <select
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value as AccountStatus)}
+                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400 cursor-pointer"
+                >
+                  <option value="متاح">🟢 متاح للبيع</option>
+                  <option value="محجوز">🟡 محجوز لعميل</option>
+                  <option value="مباع">🔴 مباع</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingAccount(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 transition-colors"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="button"
+                  disabled={savingEdit || !editPrice}
+                  onClick={handleSaveQuickEdit}
+                  className="px-5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-bold transition-all shadow-md"
+                >
+                  {savingEdit ? 'جارٍ الحفظ...' : 'حفظ التعديلات'}
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

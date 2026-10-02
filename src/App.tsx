@@ -118,30 +118,32 @@ export default function App() {
           const list: EFootballAccount[] = [];
           snapshot.forEach((docSnap) => {
             const d = docSnap.data();
-            // In the public store, show accounts that are not marked as sold
-            if (!d.sold) {
+            const isSold = d.status === 'مباع' || d.sold === true;
+            if (!isSold) {
+              const ratingNum = parseInt(d.rating || d.teamStrength || '3150', 10) || 3150;
               list.push({
                 id: docSnap.id,
                 title: d.title || 'حساب eFootball 2026',
                 subtitle: d.description || '',
                 priceSDG: Number(d.price) || 0,
-                teamStrength: Number(d.teamStrength) || 3100,
+                teamStrength: ratingNum,
                 boosterCount: Number(d.boosterCount) || 5,
                 messiCount: Number(d.messiCount) || 1,
                 ronaldoCount: Number(d.ronaldoCount) || 1,
                 coins: Number(d.coins) || 0,
                 gpPoints: d.gpPoints || '1M',
                 platform: d.game?.toLowerCase().includes('console') ? 'console' : 'mobile',
-                platformLabel: d.platformLabel || (d.game || 'eFootball 2026'),
+                platformLabel: d.status === 'محجوز' ? 'محجوز لعميل' : 'موبايل (Android / iOS)',
+                featuredBadge: d.status === 'محجوز' ? 'محجوز لعميل 🟡' : undefined,
                 image: d.image || '/src/assets/images/squad_showcase_legends_1790969434039.jpg',
                 division: d.division || 'ديفيجن 1',
-                manager: d.manager || 'مدرب متميز',
+                manager: d.manager || 'تشكيلة أساطير',
                 formation: d.formation || '4-3-3',
                 topPlayers: Array.isArray(d.topPlayers)
                   ? d.topPlayers
                   : (d.description ? [d.description] : ['نجوم الأساطير']),
                 description: d.description || '',
-                konamiStatus: 'تسليم فوري ومباشر مع كافة الضمانات',
+                konamiStatus: 'تسليم يدوي فوري ومباشر عبر واتساب',
                 guaranteeDays: 30
               });
             }
