@@ -1,16 +1,15 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
 import { auth, provider, signInWithPopup, signOut } from '../firebase';
-import { ShieldCheck, LogOut, Trophy, Sparkles, Heart, Shield, Lock } from 'lucide-react';
-import { UnauthorizedDomainModal } from './UnauthorizedDomainModal';
+import { ShieldCheck, LogOut, Trophy, Heart, Shield } from 'lucide-react';
 
 interface NavbarProps {
   user: UserProfile | null;
   loadingAuth: boolean;
   wishlistCount: number;
+  isAdmin?: boolean;
   onOpenWishlist: () => void;
-  onOpenAdmin: () => void;
-  onPreviewLogin: (profile: UserProfile) => void;
+  onOpenAdmin?: () => void;
   onSignOut: () => void;
 }
 
@@ -18,14 +17,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   user,
   loadingAuth,
   wishlistCount,
+  isAdmin = false,
   onOpenWishlist,
   onOpenAdmin,
-  onPreviewLogin,
   onSignOut
 }) => {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [showDomainModal, setShowDomainModal] = useState(false);
 
   const handleGoogleSignIn = async () => {
     try {
@@ -33,19 +31,13 @@ export const Navbar: React.FC<NavbarProps> = ({
       setAuthError(null);
       await signInWithPopup(auth, provider);
     } catch (err: unknown) {
-      console.error('Google Sign In Error:', err);
       const error = err as { code?: string; message?: string };
-      
-      if (error?.code === 'auth/unauthorized-domain' || error?.message?.includes('unauthorized-domain')) {
-        // Show detailed guidance modal with copy domain & instant preview login option
-        setShowDomainModal(true);
-        setAuthError(null);
-      } else if (error?.code === 'auth/popup-closed-by-user') {
-        // User closed popup, silent handle
+      if (error?.code === 'auth/popup-closed-by-user') {
+        // User closed popup
       } else if (error?.code === 'auth/popup-blocked') {
-        setAuthError('تم حظر النافذة المنبثقة بواسطة المتصفح، يرجى السماح بالنوافذ المنبثقة للمتابعة.');
+        setAuthError('يرجى السماح بالنوافذ المنبثقة لتسجيل الدخول.');
       } else {
-        setAuthError('تعذر تسجيل الدخول بواسطة Google حالياً. يرجى المحاولة مرة أخرى.');
+        setAuthError('تعذر تسجيل الدخول حالياً، يرجى المحاولة مرة أخرى.');
       }
     } finally {
       setIsSigningIn(false);
@@ -56,8 +48,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     try {
       await signOut(auth);
       onSignOut();
-    } catch (err) {
-      console.error('Sign Out Error:', err);
+    } catch {
       onSignOut();
     }
   };
@@ -109,7 +100,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </a>
         </nav>
 
-        {/* Zone 3 (Left in RTL): Wishlist, Admin & Google Sign-in */}
+        {/* Zone 3 (Left in RTL): Wishlist & Google Sign-in */}
         <div className="flex items-center gap-2.5">
           
           {/* Wishlist Button */}
@@ -127,15 +118,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </button>
 
-          {/* Admin Panel Button */}
-          <button
-            onClick={onOpenAdmin}
-            title="لوحة تحكم الإدارة"
-            className="p-2.5 rounded-xl bg-slate-900/90 border border-amber-500/30 text-amber-300 hover:bg-amber-500/10 transition-colors flex items-center gap-1.5 text-xs font-semibold"
-          >
-            <Shield className="w-4 h-4 text-amber-400" />
-            <span className="hidden sm:inline">لوحة الإدارة</span>
-          </button>
+          {/* Admin Panel Button - ONLY visible if verified admin user */}
+          {isAdmin && onOpenAdmin && (
+            <button
+              onClick={onOpenAdmin}
+              title="لوحة الإدارة"
+              className="p-2.5 rounded-xl bg-slate-900/90 border border-amber-500/30 text-amber-300 hover:bg-amber-500/10 transition-colors flex items-center gap-1.5 text-xs font-semibold"
+            >
+              <Shield className="w-4 h-4 text-amber-400" />
+              <span className="hidden sm:inline">لوحة الإدارة</span>
+            </button>
+          )}
 
           {/* Google Sign-in or User Profile */}
           {loadingAuth ? (
@@ -157,7 +150,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               
               <div className="hidden sm:flex flex-col text-right">
                 <span className="text-xs font-bold text-white max-w-[110px] truncate">
-                  {user.displayName || 'عميل مميز'}
+                  {user.displayName || 'عميل المتجر'}
                 </span>
                 <span className="text-[10px] text-emerald-400 flex items-center gap-1">
                   <ShieldCheck className="w-3 h-3" /> حساب موثق
@@ -179,7 +172,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               disabled={isSigningIn}
               className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-slate-900 bg-white hover:bg-slate-100 active:scale-95 rounded-xl transition-all duration-150 shadow-md shadow-white/10 border border-slate-200"
             >
-              {/* Colorful Official Google Logo */}
               <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -187,7 +179,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
               </svg>
               <span className="whitespace-nowrap font-medium text-slate-800 hidden xs:inline">
-                {isSigningIn ? 'جارٍ الدخول...' : 'المتابعة بـ Google'}
+                {isSigningIn ? 'جارٍ الدخول...' : 'تسجيل الدخول'}
               </span>
               <span className="whitespace-nowrap font-medium text-slate-800 xs:hidden">
                 دخول
@@ -195,20 +187,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
         </div>
+
       </div>
 
       {authError && (
-        <div className="bg-red-900/60 border-t border-red-500/40 px-4 py-2 text-center text-xs text-red-200">
+        <div className="bg-red-950/60 border-t border-red-500/30 py-2 px-4 text-center text-xs text-red-300">
           {authError}
         </div>
       )}
-
-      {/* Unauthorized Domain Assistance Modal */}
-      <UnauthorizedDomainModal
-        isOpen={showDomainModal}
-        onClose={() => setShowDomainModal(false)}
-        onPreviewLogin={onPreviewLogin}
-      />
     </header>
   );
 };

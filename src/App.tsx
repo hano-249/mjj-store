@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { auth, onAuthStateChanged, provider, signInWithPopup } from './firebase';
-import { UserProfile, EFootballAccount, FilterState, CustomerOrder, OrderStatus } from './types';
-import { INITIAL_ACCOUNTS } from './data/accounts';
-import { INITIAL_ORDERS } from './data/orders';
+import { auth, onAuthStateChanged, db } from './firebase';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { UserProfile, EFootballAccount, FilterState, CustomerOrder } from './types';
 import { Navbar } from './components/Navbar';
 import { HeroBanner } from './components/HeroBanner';
 import { FilterBar } from './components/FilterBar';
@@ -10,23 +9,30 @@ import { AccountCard } from './components/AccountCard';
 import { AccountDetailsModal } from './components/AccountDetailsModal';
 import { BuyModal } from './components/BuyModal';
 import { WishlistDrawer } from './components/WishlistDrawer';
-import { AdminPanel } from './components/AdminPanel';
 import { SecretAdminPage } from './pages/SecretAdminPage';
 import { TrustSection } from './components/TrustSection';
 import { PaymentMethodsSection } from './components/PaymentMethodsSection';
 import { FaqSection } from './components/FaqSection';
 import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { Footer } from './components/Footer';
-import { Trophy, Flame, RotateCcw, Heart, AlertCircle, X } from 'lucide-react';
+import { Trophy, Flame, RotateCcw, Heart, X, ShieldAlert } from 'lucide-react';
 
-const checkIsSecretAdminPath = () => {
+const ADMIN_UIDS = [
+  'mRqhzZ06Lr012QFgYA1zHw4I8o72',
+  'mRqhzZO6LrO12QFgYA1zHw4I8o72'
+];
+
+const isAdminPath = () => {
   if (typeof window === 'undefined') return false;
-  const path = window.location.pathname.replace(/\/+$/, '');
-  const hash = window.location.hash.replace(/\/+$/, '');
+  const p = window.location.pathname.replace(/\/+$/, '');
+  const h = window.location.hash.replace(/\/+$/, '');
   return (
-    path === '/mj-khalid-77-store-2026' ||
-    hash === '#/mj-khalid-77-store-2026' ||
-    hash === '#mj-khalid-77-store-2026'
+    p === '/mj-khalid-77' ||
+    p === '/mj-khalid-77-store-2026' ||
+    h === '#/mj-khalid-77' ||
+    h === '#/mj-khalid-77-store-2026' ||
+    h === '#mj-khalid-77' ||
+    h === '#mj-khalid-77-store-2026'
   );
 };
 
@@ -34,13 +40,33 @@ export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
 
-  // Secret route state for /mj-khalid-77-store-2026
-  const [isSecretAdminRoute, setIsSecretAdminRoute] = useState<boolean>(() => checkIsSecretAdminPath());
+  // Route state
+  const [isAdminRoute, setIsAdminRoute] = useState<boolean>(() => isAdminPath());
+
+  // Accounts state - loaded from Firestore collection 'accounts'
+  const [accounts, setAccounts] = useState<EFootballAccount[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
+
+  // Modals state
+  const [selectedDetailsAccount, setSelectedDetailsAccount] = useState<EFootballAccount | null>(null);
+  const [selectedBuyAccount, setSelectedBuyAccount] = useState<EFootballAccount | null>(null);
+  const [isWishlistOpen, setIsWishlistOpen] = useState(false);
+  const [wishlistToast, setWishlistToast] = useState<string | null>(null);
+
+  // Wishlist IDs per user
+  const [wishlistIds, setWishlistIds] = useState<string[]>([]);
+
+  // Filter state
+  const [filters, setFilters] = useState<FilterState>({
+    searchQuery: '',
+    platform: 'all',
+    priceRange: 'all'
+  });
 
   // Listen to popstate and hashchange for URL changes
   useEffect(() => {
     const handleRouteChange = () => {
-      setIsSecretAdminRoute(checkIsSecretAdminPath());
+      setIsAdminRoute(isAdminPath());
     };
     window.addEventListener('popstate', handleRouteChange);
     window.addEventListener('hashchange', handleRouteChange);
@@ -50,80 +76,18 @@ export default function App() {
     };
   }, []);
 
-  const navigateToSecretAdmin = () => {
-    window.history.pushState({}, '', '/mj-khalid-77-store-2026');
-    setIsSecretAdminRoute(true);
+  const navigateToAdmin = () => {
+    window.history.pushState({}, '', '/mj-khalid-77');
+    setIsAdminRoute(true);
   };
 
   const navigateBackToStore = () => {
     window.history.pushState({}, '', '/');
-    setIsSecretAdminRoute(false);
+    setIsAdminRoute(false);
   };
 
-  // Accounts state with persistence
-  const [accounts, setAccounts] = useState<EFootballAccount[]>(() => {
-    const saved = localStorage.getItem('mj_store_accounts');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        // fallback to initial
-      }
-    }
-    return INITIAL_ACCOUNTS;
-  });
-
-  // Orders state with persistence
-  const [orders, setOrders] = useState<CustomerOrder[]>(() => {
-    const saved = localStorage.getItem('mj_store_orders');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        // fallback to initial
-      }
-    }
-    return INITIAL_ORDERS;
-  });
-
-  // Modals state
-  const [selectedDetailsAccount, setSelectedDetailsAccount] = useState<EFootballAccount | null>(null);
-  const [selectedBuyAccount, setSelectedBuyAccount] = useState<EFootballAccount | null>(null);
-  const [isWishlistOpen, setIsWishlistOpen] = useState(false);
-  const [isAdminOpen, setIsAdminOpen] = useState(false);
-  const [wishlistToast, setWishlistToast] = useState<string | null>(null);
-
-  // Wishlist IDs per user
-  const [wishlistIds, setWishlistIds] = useState<string[]>([]);
-
-  // Filter state (Simple single-row: search, platform, price range)
-  const [filters, setFilters] = useState<FilterState>({
-    searchQuery: '',
-    platform: 'all',
-    priceRange: 'all'
-  });
-
-  // Persist accounts whenever changed
+  // Listen to Firebase auth state
   useEffect(() => {
-    localStorage.setItem('mj_store_accounts', JSON.stringify(accounts));
-  }, [accounts]);
-
-  // Persist orders whenever changed
-  useEffect(() => {
-    localStorage.setItem('mj_store_orders', JSON.stringify(orders));
-  }, [orders]);
-
-  // Listen to Firebase auth state & restore user
-  useEffect(() => {
-    const storedPreviewUser = localStorage.getItem('mj_store_preview_user');
-    if (storedPreviewUser) {
-      try {
-        setUser(JSON.parse(storedPreviewUser));
-      } catch (e) {
-        // ignore parse error
-      }
-    }
-
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
         setUser({
@@ -132,17 +96,68 @@ export default function App() {
           email: firebaseUser.email,
           photoURL: firebaseUser.photoURL
         });
-        localStorage.removeItem('mj_store_preview_user');
       } else {
-        const stillInPreview = localStorage.getItem('mj_store_preview_user');
-        if (!stillInPreview) {
-          setUser(null);
-        }
+        setUser(null);
       }
       setLoadingAuth(false);
     });
 
     return () => unsubscribe();
+  }, []);
+
+  // Live Firestore accounts synchronization
+  useEffect(() => {
+    setLoadingAccounts(true);
+    let unsub = () => {};
+
+    try {
+      const q = collection(db, 'accounts');
+      unsub = onSnapshot(
+        q,
+        (snapshot) => {
+          const list: EFootballAccount[] = [];
+          snapshot.forEach((docSnap) => {
+            const d = docSnap.data();
+            // In the public store, show accounts that are not marked as sold
+            if (!d.sold) {
+              list.push({
+                id: docSnap.id,
+                title: d.title || 'حساب eFootball 2026',
+                subtitle: d.description || '',
+                priceSDG: Number(d.price) || 0,
+                teamStrength: Number(d.teamStrength) || 3100,
+                boosterCount: Number(d.boosterCount) || 5,
+                messiCount: Number(d.messiCount) || 1,
+                ronaldoCount: Number(d.ronaldoCount) || 1,
+                coins: Number(d.coins) || 0,
+                gpPoints: d.gpPoints || '1M',
+                platform: d.game?.toLowerCase().includes('console') ? 'console' : 'mobile',
+                platformLabel: d.platformLabel || (d.game || 'eFootball 2026'),
+                image: d.image || '/src/assets/images/squad_showcase_legends_1790969434039.jpg',
+                division: d.division || 'ديفيجن 1',
+                manager: d.manager || 'مدرب متميز',
+                formation: d.formation || '4-3-3',
+                topPlayers: Array.isArray(d.topPlayers)
+                  ? d.topPlayers
+                  : (d.description ? [d.description] : ['نجوم الأساطير']),
+                description: d.description || '',
+                konamiStatus: 'تسليم فوري ومباشر مع كافة الضمانات',
+                guaranteeDays: 30
+              });
+            }
+          });
+          setAccounts(list);
+          setLoadingAccounts(false);
+        },
+        () => {
+          setLoadingAccounts(false);
+        }
+      );
+    } catch {
+      setLoadingAccounts(false);
+    }
+
+    return () => unsub();
   }, []);
 
   // Sync wishlist for current user
@@ -152,7 +167,7 @@ export default function App() {
     if (saved) {
       try {
         setWishlistIds(JSON.parse(saved));
-      } catch (e) {
+      } catch {
         setWishlistIds([]);
       }
     } else {
@@ -160,7 +175,6 @@ export default function App() {
     }
   }, [user]);
 
-  // Save wishlist changes
   const saveWishlist = (newIds: string[]) => {
     setWishlistIds(newIds);
     const storageKey = user ? `mj_store_wishlist_${user.uid}` : 'mj_store_wishlist_guest';
@@ -175,7 +189,7 @@ export default function App() {
   // Toggle wishlist handler
   const handleToggleWishlist = (account: EFootballAccount) => {
     if (!user) {
-      showNotification('يرجى تسجيل الدخول أولاً عبر Google لإضافة الحساب إلى قائمة الرغبات الخاصة بك.');
+      showNotification('يرجى تسجيل الدخول أولاً لإضافة الحساب إلى قائمة الرغبات الخاصة بك.');
       return;
     }
 
@@ -196,52 +210,8 @@ export default function App() {
     saveWishlist(nextIds);
   };
 
-  // Admin Account Actions
-  const handleAddAccount = (newAcc: EFootballAccount) => {
-    setAccounts((prev) => [newAcc, ...prev]);
-    showNotification(`تم إدراج الحساب الجديد "${newAcc.title}" بنجاح في متجر MJ STORE!`);
-  };
-
-  const handleUpdateAccount = (updatedAcc: EFootballAccount) => {
-    setAccounts((prev) => prev.map((a) => (a.id === updatedAcc.id ? updatedAcc : a)));
-    showNotification(`تم تحديث بيانات الحساب "${updatedAcc.title}" بنجاح!`);
-  };
-
-  const handleDeleteAccount = (accountId: string) => {
-    setAccounts((prev) => prev.filter((a) => a.id !== accountId));
-    setWishlistIds((prev) => prev.filter((id) => id !== accountId));
-    showNotification('تم حذف الحساب من المتجر بنجاح.');
-  };
-
-  // Admin Order Actions
-  const handleOrderCreated = (order: CustomerOrder) => {
-    setOrders((prev) => [order, ...prev]);
-  };
-
-  const handleUpdateOrderStatus = (orderId: string, status: OrderStatus, notes?: string) => {
-    setOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.id === orderId) {
-          return {
-            ...ord,
-            status,
-            notes: notes !== undefined ? notes : ord.notes
-          };
-        }
-        return ord;
-      })
-    );
-    showNotification(`تم تحديث حالة الطلب #${orderId} إلى: ${status}`);
-  };
-
-  const handlePreviewLogin = (profile: UserProfile) => {
-    setUser(profile);
-    localStorage.setItem('mj_store_preview_user', JSON.stringify(profile));
-  };
-
   const handleSignOut = () => {
     setUser(null);
-    localStorage.removeItem('mj_store_preview_user');
   };
 
   // Filter accounts (Automatic sorting: Newest first)
@@ -252,7 +222,7 @@ export default function App() {
         return false;
       }
 
-      // 2. Dynamic Price range filter (No 200k cap)
+      // 2. Dynamic Price range filter (No cap)
       if (filters.priceRange === 'under-50k' && acc.priceSDG >= 50000) {
         return false;
       }
@@ -299,9 +269,39 @@ export default function App() {
     }
   };
 
-  if (isSecretAdminRoute) {
+  // Security Check: Is the user an authenticated admin?
+  const isAuthorizedAdmin = Boolean(user && ADMIN_UIDS.includes(user.uid));
+
+  // Route Handling for Secret Admin Paths (/mj-khalid-77, /mj-khalid-77-store-2026)
+  if (isAdminRoute) {
+    // If not authenticated or not the verified admin: render a pure standard 404 (No leaks)
+    if (!isAuthorizedAdmin) {
+      return (
+        <div className="min-h-screen bg-[#050811] text-slate-100 flex flex-col items-center justify-center p-6 text-center font-['Cairo',sans-serif]">
+          <div className="max-w-md w-full bg-[#080d21] border border-slate-800 rounded-2xl p-8 shadow-2xl">
+            <div className="text-6xl font-black text-amber-400 mb-3 font-mono">404</div>
+            <h2 className="text-xl font-bold text-white mb-2">الصفحة غير موجودة</h2>
+            <p className="text-xs text-slate-400 mb-6 leading-relaxed">
+              عذراً، الصفحة التي تبحث عنها غير متوفرة أو ربما تم تغيير مسارها.
+            </p>
+            <button
+              onClick={navigateBackToStore}
+              className="px-6 py-2.5 rounded-xl bg-amber-400 text-slate-950 font-bold text-xs hover:bg-amber-300 transition-colors"
+            >
+              العودة للمتجر الرئيسي
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // If verified admin: Render the Admin Page
     return (
-      <SecretAdminPage onBackToStore={navigateBackToStore} />
+      <SecretAdminPage
+        user={user!}
+        onBackToStore={navigateBackToStore}
+        onSignOut={handleSignOut}
+      />
     );
   }
 
@@ -328,9 +328,9 @@ export default function App() {
         user={user}
         loadingAuth={loadingAuth}
         wishlistCount={wishlistIds.length}
+        isAdmin={isAuthorizedAdmin}
         onOpenWishlist={() => setIsWishlistOpen(true)}
-        onOpenAdmin={navigateToSecretAdmin}
-        onPreviewLogin={handlePreviewLogin}
+        onOpenAdmin={isAuthorizedAdmin ? navigateToAdmin : undefined}
         onSignOut={handleSignOut}
       />
 
@@ -369,7 +369,12 @@ export default function App() {
         />
 
         {/* Accounts Grid */}
-        {filteredAccounts.length > 0 ? (
+        {loadingAccounts ? (
+          <div className="text-center py-20 bg-[#0a0f24] rounded-2xl border border-slate-800">
+            <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+            <p className="text-xs text-slate-400">جارٍ تحميل الحسابات المتاحة من قاعدة البيانات...</p>
+          </div>
+        ) : filteredAccounts.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredAccounts.map((account) => (
               <AccountCard
@@ -383,29 +388,35 @@ export default function App() {
             ))}
           </div>
         ) : (
-          /* Empty Filter State */
+          /* Empty Catalog or Search State */
           <div className="text-center py-16 px-4 bg-[#0a0f24] rounded-2xl border border-slate-800">
             <Trophy className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-            <h3 className="text-lg font-bold text-white mb-2">لا توجد حسابات مطابقة للبحث</h3>
+            <h3 className="text-lg font-bold text-white mb-2">
+              {accounts.length === 0 ? 'لا توجد حسابات معروضة حالياً' : 'لا توجد حسابات مطابقة للبحث'}
+            </h3>
             <p className="text-xs text-slate-400 max-w-md mx-auto mb-6">
-              جرب تغيير كلمات البحث أو اختيار نطاق سعر مختلف، أو تواصل معنا لتوفير حساب بمواصفاتك الخاصة فوراً.
+              {accounts.length === 0
+                ? 'ترقبوا تشكيلات وحسابات أسطورية جديدة قريباً، أو تواصل معنا مباشرة لتوفير حساب بمواصفاتك الخاصة.'
+                : 'جرب تغيير كلمات البحث أو اختيار نطاق سعر مختلف، أو تواصل معنا لتوفير حساب بمواصفاتك الخاصة فوراً.'}
             </p>
             <div className="flex justify-center gap-3">
+              {accounts.length > 0 && (
+                <button
+                  onClick={() =>
+                    setFilters({
+                      searchQuery: '',
+                      platform: 'all',
+                      priceRange: 'all'
+                    })
+                  }
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 text-xs font-semibold text-slate-300 hover:text-white"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>إعادة ضبط الفلاتر</span>
+                </button>
+              )}
               <button
-                onClick={() =>
-                  setFilters({
-                    searchQuery: '',
-                    platform: 'all',
-                    priceRange: 'all'
-                  })
-                }
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 text-xs font-semibold text-slate-300 hover:text-white"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>إعادة ضبط الفلاتر</span>
-              </button>
-              <button
-                onClick={() => handleOpenWhatsApp('السلام عليكم، أبحث عن حساب بمواصفات خاصة')}
+                onClick={() => handleOpenWhatsApp('السلام عليكم متجر MJ STORE، أود طلب حساب بمواصفات خاصة')}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-400 text-slate-950 text-xs font-bold hover:bg-amber-300"
               >
                 <span>طلب حساب مخصص عبر واتساب</span>
@@ -426,7 +437,7 @@ export default function App() {
       <FaqSection />
 
       {/* Footer */}
-      <Footer onNavigateToSecretAdmin={navigateToSecretAdmin} />
+      <Footer />
 
       {/* Floating WhatsApp Button */}
       <FloatingWhatsApp onChatClick={() => handleOpenWhatsApp()} />
@@ -460,21 +471,7 @@ export default function App() {
       <BuyModal
         account={selectedBuyAccount}
         user={user}
-        onOrderCreated={handleOrderCreated}
         onClose={() => setSelectedBuyAccount(null)}
-      />
-
-      {/* Admin Panel Modal */}
-      <AdminPanel
-        isOpen={isAdminOpen}
-        onClose={() => setIsAdminOpen(false)}
-        accounts={accounts}
-        orders={orders}
-        currentUser={user}
-        onAddAccount={handleAddAccount}
-        onUpdateAccount={handleUpdateAccount}
-        onDeleteAccount={handleDeleteAccount}
-        onUpdateOrderStatus={handleUpdateOrderStatus}
       />
     </div>
   );

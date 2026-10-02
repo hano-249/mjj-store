@@ -1,11 +1,7 @@
 import React from 'react';
-import { ShieldCheck, MessageCircle, Trophy, Heart, Lock } from 'lucide-react';
+import { ShieldCheck, MessageCircle } from 'lucide-react';
 
-interface FooterProps {
-  onNavigateToSecretAdmin?: () => void;
-}
-
-export const Footer: React.FC<FooterProps> = ({ onNavigateToSecretAdmin }) => {
+export const Footer: React.FC = () => {
   return (
     <footer className="bg-[#040712] border-t border-slate-800 text-slate-400 text-xs py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -85,15 +81,6 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateToSecretAdmin }) => {
           </div>
           <div className="flex items-center gap-3 text-slate-400">
             <span>صُمم بأعلى معايير الجودة للاعبي السودان والعالم العربي</span>
-            {onNavigateToSecretAdmin && (
-              <button
-                onClick={onNavigateToSecretAdmin}
-                className="opacity-40 hover:opacity-100 transition-opacity p-1 text-slate-500 hover:text-amber-400"
-                title="لوحة الإدارة السرية /mj-khalid-77-store-2026"
-              >
-                <Lock className="w-3.5 h-3.5" />
-              </button>
-            )}
           </div>
         </div>
 
@@ -101,4 +88,3 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateToSecretAdmin }) => {
     </footer>
   );
 };
-
