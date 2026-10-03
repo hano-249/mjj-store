@@ -42,7 +42,7 @@ export const PaymentMethodsSection: React.FC = () => {
             وسائل دفع سودانية معتمدة
           </span>
           <h2 className="text-2xl sm:text-4xl font-black text-white mb-3">
-            طرق الدفع المتوفرة للشراء في <span className="text-amber-400">MJ STORE</span>
+            طرق الدفع المتوفرة للشراء في <span className="text-amber-400">GUNNERS STORE</span>
           </h2>
           <p className="text-sm text-slate-400">
             طرق الدفع المتوفرة للشراء محصورة رسمياً في: <strong className="text-amber-300">بنكك، أوكاش، ماي كاشي، برافو فقط</strong> لضمان أعلى سرعة وأمان في التسليم.

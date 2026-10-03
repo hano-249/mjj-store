@@ -13,11 +13,11 @@ export const PrivacyPage: React.FC<PrivacyPageProps> = ({ onBackToStore }) => {
       <header className="sticky top-0 z-40 bg-[#070b18]/95 backdrop-blur-md border-b border-amber-500/20 shadow-xl">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-18 flex items-center justify-between py-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 via-amber-600 to-yellow-600 flex items-center justify-center text-slate-950 font-black shadow-md shadow-amber-500/20">
-              MJ
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 via-amber-600 to-yellow-600 flex items-center justify-center text-slate-950 font-black text-xs shadow-md shadow-amber-500/20">
+              GS
             </div>
             <div>
-              <span className="text-base sm:text-lg font-black text-white block">MJ STORE</span>
+              <span className="text-base sm:text-lg font-black text-white block">GUNNERS STORE</span>
               <span className="text-[11px] text-emerald-400 font-medium">سياسة الخصوصية وحماية البيانات</span>
             </div>
           </div>
@@ -43,7 +43,7 @@ export const PrivacyPage: React.FC<PrivacyPageProps> = ({ onBackToStore }) => {
               <span>خصوصية المستخدمين وأمان الحسابات</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              سياسة الخصوصية - MJ STORE
+              سياسة الخصوصية - GUNNERS STORE
             </h1>
             <p className="text-xs text-slate-400 mt-2 font-mono">
               آخر تحديث: 2 أكتوبر 2026
@@ -52,7 +52,7 @@ export const PrivacyPage: React.FC<PrivacyPageProps> = ({ onBackToStore }) => {
 
           {/* Intro */}
           <p className="text-sm sm:text-base text-slate-300 leading-relaxed bg-slate-900/60 p-4 rounded-xl border border-slate-800">
-            في <strong className="text-amber-400">MJ STORE</strong> خصوصيتك أهم حاجة عندنا. الوثيقة دي بتوضح كيف بنتعامل مع بياناتك.
+            في <strong className="text-amber-400">GUNNERS STORE</strong> خصوصيتك أهم حاجة عندنا. الوثيقة دي بتوضح كيف بنتعامل مع بياناتك.
           </p>
 
           {/* Section 1 */}
@@ -156,7 +156,7 @@ export const PrivacyPage: React.FC<PrivacyPageProps> = ({ onBackToStore }) => {
               <span>8. التواصل</span>
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed pr-4">
-              إذا عندك أي سؤال حول الخصوصية، تواصل معنا عبر واتساب MJ STORE.
+              إذا عندك أي سؤال حول الخصوصية، تواصل معنا عبر واتساب GUNNERS STORE.
             </p>
           </section>
 

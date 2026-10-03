@@ -43,8 +43,8 @@ export const Navbar: React.FC<NavbarProps> = ({
         <a href="#home" className="flex items-center gap-3 group">
           <div className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 via-amber-600 to-blue-900 p-0.5 shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform duration-200">
             <div className="w-full h-full bg-[#070c1d] rounded-[10px] flex items-center justify-center">
-              <span className="font-extrabold text-lg text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-amber-500">
-                MJ
+              <span className="font-extrabold text-sm text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-amber-500">
+                GS
               </span>
             </div>
             <div className="absolute -bottom-1 -left-1 w-3 h-3 bg-amber-400 rounded-full animate-ping opacity-75" />
@@ -53,7 +53,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
               <span className="text-xl sm:text-2xl font-black tracking-tight text-white group-hover:text-amber-400 transition-colors">
-                MJ STORE
+                GUNNERS STORE
               </span>
               <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded">
                 <Trophy className="w-3 h-3 text-amber-400" />

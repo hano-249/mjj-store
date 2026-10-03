@@ -30,10 +30,10 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateToTerms, onNavigateToP
           {/* Brand info */}
           <div className="space-y-3 md:col-span-1">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-blue-900 flex items-center justify-center font-black text-slate-950 text-sm">
-                MJ
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-blue-900 flex items-center justify-center font-black text-slate-950 text-xs">
+                GS
               </div>
-              <span className="text-lg font-black text-white">MJ STORE</span>
+              <span className="text-lg font-black text-white">GUNNERS STORE</span>
             </div>
             <p className="text-slate-400 text-xs leading-relaxed">
               المتجر السوداني الأول المتخصص في بيع وشراء أقوى حسابات eFootball 2026 بضمان رسمي وتسليم فوري ومباشر.
@@ -103,7 +103,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateToTerms, onNavigateToP
         {/* Bottom copyright & policies bar */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-500 text-[11px]">
           <div>
-            جميع الحقوق محفوظة &copy; {new Date().getFullYear()} <strong className="text-slate-300">MJ STORE</strong>. لعبة eFootball وشعاراتها علامات تجارية تابعة لشركة Konami Digital Entertainment.
+            جميع الحقوق محفوظة &copy; {new Date().getFullYear()} <strong className="text-slate-300">GUNNERS STORE</strong>. لعبة eFootball وشعاراتها علامات تجارية تابعة لشركة Konami Digital Entertainment.
           </div>
 
           {/* Policy Links in Footer */}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { auth, onAuthStateChanged, provider, signInWithPopup, db } from './firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { UserProfile, EFootballAccount, FilterState } from './types';
 import { Navbar } from './components/Navbar';
 import { HeroBanner } from './components/HeroBanner';
@@ -20,10 +20,17 @@ import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { Footer } from './components/Footer';
 import { Trophy, Flame, RotateCcw, Heart, X } from 'lucide-react';
 
-const ADMIN_UIDS = [
-  "mRqhzZO6LrO12QFgYA1zHw4I8o72",
-  "xac8JOhvblZroF3PmijwlOdX5eI3"
-];
+// Dynamic Admin Verification: Checks if user document exists in 'admins' collection
+const checkIsAdmin = async (uid?: string | null): Promise<boolean> => {
+  if (!uid) return false;
+  try {
+    const snap = await getDoc(doc(db, "admins", uid));
+    return snap.exists();
+  } catch (err) {
+    console.error('Error verifying admin status:', err);
+    return false;
+  }
+};
 
 type RouteState = 'store' | 'admin' | 'terms' | 'privacy';
 
@@ -50,6 +57,10 @@ const getCurrentRoute = (): RouteState => {
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
+
+  // Dynamic admin verification state
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [checkingAdmin, setCheckingAdmin] = useState(true);
 
   // Route state
   const [currentRoute, setCurrentRoute] = useState<RouteState>(() => getCurrentRoute());
@@ -160,6 +171,37 @@ export default function App() {
 
     return () => unsubscribe();
   }, []);
+
+  // Dynamic admin verification via Firestore 'admins' collection
+  useEffect(() => {
+    let isMounted = true;
+    if (loadingAuth) return;
+
+    if (!user?.uid) {
+      setIsAdmin(false);
+      setCheckingAdmin(false);
+      return;
+    }
+
+    setCheckingAdmin(true);
+    checkIsAdmin(user.uid)
+      .then((status) => {
+        if (isMounted) {
+          setIsAdmin(status);
+          setCheckingAdmin(false);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setIsAdmin(false);
+          setCheckingAdmin(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.uid, loadingAuth]);
 
   // Live Firestore accounts synchronization
   useEffect(() => {
@@ -318,7 +360,7 @@ export default function App() {
 
   // WhatsApp general contact
   const handleOpenWhatsApp = (customText?: string) => {
-    const text = customText || 'السلام عليكم متجر MJ STORE، أود الاستفسار وطلب حساب eFootball 2026.';
+    const text = customText || 'السلام عليكم متجر GUNNERS STORE، أود الاستفسار وطلب حساب eFootball 2026.';
     const url = `https://wa.me/249916952608?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
   };
@@ -330,9 +372,6 @@ export default function App() {
     }
   };
 
-  // Security Check: Is the user an authenticated admin?
-  const isAdmin = Boolean(user && ADMIN_UIDS.includes(user.uid));
-
   // 1. Terms Page Route
   if (currentRoute === 'terms') {
     return <TermsPage onBackToStore={navigateToStore} />;
@@ -343,8 +382,16 @@ export default function App() {
     return <PrivacyPage onBackToStore={navigateToStore} />;
   }
 
-  // 3. Secret Admin Route
+  // 3. Secret Admin Route (Dynamic Authorization via 'admins' Firestore collection)
   if (currentRoute === 'admin') {
+    if (loadingAuth || checkingAdmin) {
+      return (
+        <div className="min-h-screen bg-[#050811] text-slate-100 flex items-center justify-center p-6 text-center font-['Cairo',sans-serif]">
+          <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+        </div>
+      );
+    }
+
     if (!isAdmin) {
       return (
         <div className="min-h-screen bg-[#050811] text-slate-100 flex flex-col items-center justify-center p-6 text-center font-['Cairo',sans-serif]">
@@ -416,7 +463,7 @@ export default function App() {
       <main id="accounts" className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 w-full">
         {/* Hidden SEO H1 Heading */}
         <h1 style={{ position: 'absolute', left: '-9999px' }}>
-          متجر حسابات بيس السودان - MJ STORE - حسابات eFootball قوية
+          متجر حسابات بيس السودان - GUNNERS STORE - حسابات eFootball قوية
         </h1>
         
         {/* Section Header */}
@@ -492,7 +539,7 @@ export default function App() {
                 </button>
               )}
               <button
-                onClick={() => handleOpenWhatsApp('السلام عليكم متجر MJ STORE، أود طلب حساب بمواصفات خاصة')}
+                onClick={() => handleOpenWhatsApp('السلام عليكم متجر GUNNERS STORE، أود طلب حساب بمواصفات خاصة')}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-400 text-slate-950 text-xs font-bold hover:bg-amber-300"
               >
                 <span>طلب حساب مخصص عبر واتساب</span>

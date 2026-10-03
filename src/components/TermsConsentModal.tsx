@@ -47,14 +47,14 @@ export const TermsConsentModal: React.FC<TermsConsentModalProps> = ({
               سياسة الاستخدام والخصوصية
             </h3>
             <span className="text-xs text-amber-400 font-medium">
-              متجر MJ STORE المعتمد
+              متجر GUNNERS STORE المعتمد
             </span>
           </div>
         </div>
 
         {/* Short Text */}
         <p className="text-xs sm:text-sm text-slate-300 leading-relaxed bg-slate-900/70 border border-slate-800 p-3.5 rounded-2xl mb-4">
-          بمتابعتك، أنت توافق على شروط الاستخدام وسياسة الخصوصية الخاصة بـ <strong className="text-white">MJ STORE</strong>. نحن نحمي بياناتك ولا نشاركها.
+          بمتابعتك، أنت توافق على شروط الاستخدام وسياسة الخصوصية الخاصة بـ <strong className="text-white">GUNNERS STORE</strong>. نحن نحمي بياناتك ولا نشاركها.
         </p>
 
         {/* Links to Full Policies */}

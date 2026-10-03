@@ -125,7 +125,7 @@ export const AccountDetailsModal: React.FC<AccountDetailsModalProps> = ({
             <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
             <div className="text-xs text-slate-300">
               <p className="font-bold text-emerald-300 mb-0.5">حالة الحساب وضمان التسليم:</p>
-              <p>{account.konamiStatus}. مع ضمان استرجاع كامل لمدة {account.guaranteeDays} يوماً من متجر MJ STORE.</p>
+              <p>{account.konamiStatus}. مع ضمان رسمي وتأكيد استلام فوري من متجر GUNNERS STORE.</p>
             </div>
           </div>
 

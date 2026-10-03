@@ -31,7 +31,7 @@ export const BuyModal: React.FC<BuyModalProps> = ({ account, user, onOrderCreate
   };
 
   const generateWhatsAppMessage = () => {
-    const text = `مرحباً متجر MJ STORE 👋
+    const text = `مرحباً متجر GUNNERS STORE 👋
 أرغب في شراء حساب eFootball 2026 التالي:
 📌 الحساب: ${account.title}
 🔢 كود الحساب: ${account.id}
@@ -239,7 +239,7 @@ export const BuyModal: React.FC<BuyModalProps> = ({ account, user, onOrderCreate
             </h3>
             
             <p className="text-sm text-slate-300 mb-6 leading-relaxed max-w-sm mx-auto">
-              سيقوم فريق مبيعات MJ STORE بالرد عليك فوراً على الواتساب وتزويدك برقم حساب بنكك وإتمام نقل الحساب لك بأمان.
+              سيقوم فريق مبيعات GUNNERS STORE بالرد عليك فوراً على الواتساب وتزويدك برقم حساب بنكك وإتمام نقل الحساب لك بأمان.
             </p>
 
             <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl text-xs text-slate-400 mb-6 space-y-1 text-right">

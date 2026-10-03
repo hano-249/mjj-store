@@ -13,11 +13,11 @@ export const TermsPage: React.FC<TermsPageProps> = ({ onBackToStore }) => {
       <header className="sticky top-0 z-40 bg-[#070b18]/95 backdrop-blur-md border-b border-amber-500/20 shadow-xl">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-18 flex items-center justify-between py-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 via-amber-600 to-yellow-600 flex items-center justify-center text-slate-950 font-black shadow-md shadow-amber-500/20">
-              MJ
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 via-amber-600 to-yellow-600 flex items-center justify-center text-slate-950 font-black text-xs shadow-md shadow-amber-500/20">
+              GS
             </div>
             <div>
-              <span className="text-base sm:text-lg font-black text-white block">MJ STORE</span>
+              <span className="text-base sm:text-lg font-black text-white block">GUNNERS STORE</span>
               <span className="text-[11px] text-amber-400 font-medium">الشروط والأحكام الرسمية</span>
             </div>
           </div>
@@ -43,7 +43,7 @@ export const TermsPage: React.FC<TermsPageProps> = ({ onBackToStore }) => {
               <span>اتفاقية الاستخدام والبيع الرقمي</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              شروط الاستخدام وسياسة البيع - MJ STORE
+              شروط الاستخدام وسياسة البيع - GUNNERS STORE
             </h1>
             <p className="text-xs text-slate-400 mt-2 font-mono">
               آخر تحديث: 2 أكتوبر 2026
@@ -52,7 +52,7 @@ export const TermsPage: React.FC<TermsPageProps> = ({ onBackToStore }) => {
 
           {/* Intro */}
           <p className="text-sm sm:text-base text-slate-300 leading-relaxed bg-slate-900/60 p-4 rounded-xl border border-slate-800">
-            مرحباً بك في <strong className="text-amber-400">MJ STORE</strong>. باستخدامك للموقع وتسجيلك عن طريق Google أنت توافق على هذه الشروط بالكامل.
+            مرحباً بك في <strong className="text-amber-400">GUNNERS STORE</strong>. باستخدامك للموقع وتسجيلك عن طريق Google أنت توافق على هذه الشروط بالكامل.
           </p>
 
           {/* Section 1 */}
@@ -62,7 +62,7 @@ export const TermsPage: React.FC<TermsPageProps> = ({ onBackToStore }) => {
               <span>1. طبيعة الخدمة</span>
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed pr-4">
-              MJ STORE متجر رقمي متخصص في بيع حسابات لعبة eFootball™. نحن نعرض حسابات مجمعة ونقوم بتسليمها للعميل بعد الدفع. نحن لسنا تابعين لشركة KONAMI الرسمية.
+              GUNNERS STORE متجر رقمي متخصص في بيع حسابات لعبة eFootball™. نحن نعرض حسابات مجمعة ونقوم بتسليمها للعميل بعد الدفع. نحن لسنا تابعين لشركة KONAMI الرسمية.
             </p>
           </section>
 
@@ -144,7 +144,7 @@ export const TermsPage: React.FC<TermsPageProps> = ({ onBackToStore }) => {
           {/* Footer note */}
           <div className="pt-6 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-xs text-slate-400">
-              للتواصل: واتساب MJ STORE الموجود في الموقع.
+              للتواصل: واتساب GUNNERS STORE الموجود في الموقع.
             </div>
             <div className="flex items-center gap-2 text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-xl">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />

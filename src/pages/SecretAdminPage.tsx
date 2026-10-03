@@ -319,12 +319,12 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
       {/* Top Banner Navigation */}
       <div className="bg-[#070b18] border-b border-amber-500/25 px-4 sm:px-8 py-4 flex items-center justify-between shadow-xl">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 via-amber-600 to-yellow-600 flex items-center justify-center text-slate-950 font-black shadow-md shadow-amber-500/20">
-            MJ
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 via-amber-600 to-yellow-600 flex items-center justify-center text-slate-950 font-black text-xs shadow-md shadow-amber-500/20">
+            GS
           </div>
           <div>
             <h1 className="text-base sm:text-lg font-black text-white tracking-wide">
-              لوحة تحكم MJ STORE
+              لوحة تحكم GUNNERS STORE
             </h1>
             <p className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" />
@@ -823,7 +823,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
                   filteredOrders.map((ord, idx) => {
                     const cleanPhone = ord.customerPhone?.replace(/[^0-9]/g, '') || '';
                     const waLink = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
-                      `مرحباً ${ord.customerName}، معك إدارة متجر MJ STORE بخصوص طلبك لحساب: ${ord.accountTitle}`
+                      `مرحباً ${ord.customerName}، معك إدارة متجر GUNNERS STORE بخصوص طلبك لحساب: ${ord.accountTitle}`
                     )}`;
 
                     return (
