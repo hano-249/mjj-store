@@ -20,18 +20,6 @@ import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { Footer } from './components/Footer';
 import { Trophy, Flame, RotateCcw, Heart, X } from 'lucide-react';
 
-// Dynamic Admin Verification: Checks if user document exists in 'admins' collection
-const checkIsAdmin = async (uid?: string | null): Promise<boolean> => {
-  if (!uid) return false;
-  try {
-    const snap = await getDoc(doc(db, "admins", uid));
-    return snap.exists();
-  } catch (err) {
-    console.error('Error verifying admin status:', err);
-    return false;
-  }
-};
-
 type RouteState = 'store' | 'admin' | 'terms' | 'privacy';
 
 const getCurrentRoute = (): RouteState => {
@@ -60,7 +48,6 @@ export default function App() {
 
   // Dynamic admin verification state
   const [isAdmin, setIsAdmin] = useState(false);
-  const [checkingAdmin, setCheckingAdmin] = useState(true);
 
   // Route state
   const [currentRoute, setCurrentRoute] = useState<RouteState>(() => getCurrentRoute());
@@ -174,34 +161,22 @@ export default function App() {
 
   // Dynamic admin verification via Firestore 'admins' collection
   useEffect(() => {
-    let isMounted = true;
-    if (loadingAuth) return;
-
-    if (!user?.uid) {
-      setIsAdmin(false);
-      setCheckingAdmin(false);
-      return;
-    }
-
-    setCheckingAdmin(true);
-    checkIsAdmin(user.uid)
-      .then((status) => {
-        if (isMounted) {
-          setIsAdmin(status);
-          setCheckingAdmin(false);
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          setIsAdmin(false);
-          setCheckingAdmin(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
+    const checkAdmin = async () => {
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+      try {
+        const ref = doc(db, "admins", user.uid);
+        const snap = await getDoc(ref);
+        setIsAdmin(snap.exists());
+      } catch (err) {
+        console.error('Error checking admin:', err);
+        setIsAdmin(false);
+      }
     };
-  }, [user?.uid, loadingAuth]);
+    checkAdmin();
+  }, [user]);
 
   // Live Firestore accounts synchronization
   useEffect(() => {
@@ -384,7 +359,7 @@ export default function App() {
 
   // 3. Secret Admin Route (Dynamic Authorization via 'admins' Firestore collection)
   if (currentRoute === 'admin') {
-    if (loadingAuth || checkingAdmin) {
+    if (loadingAuth) {
       return (
         <div className="min-h-screen bg-[#050811] text-slate-100 flex items-center justify-center p-6 text-center font-['Cairo',sans-serif]">
           <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
@@ -423,10 +398,10 @@ export default function App() {
 
   // 4. Main Store View
   return (
-    <div className="min-h-screen bg-[#050811] text-slate-100 flex flex-col selection:bg-amber-500 selection:text-black">
+    <div className="w-full max-w-[100vw] overflow-x-hidden min-h-screen bg-[#050811] text-slate-100 flex flex-col selection:bg-amber-500 selection:text-black">
       {/* Toast Notification */}
       {wishlistToast && (
-        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 max-w-md w-[90%] bg-[#0a1128]/95 border border-amber-400/50 shadow-2xl shadow-black p-3.5 rounded-xl text-center text-xs text-amber-200 flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4 duration-200">
+        <div className="fixed top-24 inset-x-4 max-w-md mx-auto z-50 bg-[#0a1128]/95 border border-amber-400/50 shadow-2xl shadow-black p-3.5 rounded-xl text-center text-xs text-amber-200 flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4 duration-200">
           <div className="flex items-center gap-2">
             <Heart className="w-4 h-4 text-amber-400 fill-amber-400 shrink-0" />
             <span>{wishlistToast}</span>

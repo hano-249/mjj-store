@@ -26,11 +26,11 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onBrowseClick, onWhatsAp
         <div className="max-w-3xl mx-auto text-center">
           
           {/* Subtle Trust Tag (Clean unboxed inline text) */}
-          <div className="inline-flex items-center gap-2 text-xs sm:text-sm text-amber-300 bg-amber-500/10 border border-amber-500/30 px-3.5 py-1.5 rounded-full mb-6 shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>تسليم فوري عبر واتساب: 2608 695 91 249+</span>
-            <span aria-hidden="true" className="text-amber-500/60">·</span>
-            <span>الدفع عبر: بنكك، أوكاش، ماي كاشي، برافو</span>
+          <div className="inline-flex max-w-full items-center gap-2 text-xs sm:text-sm text-amber-300 bg-amber-500/10 border border-amber-500/30 px-3.5 py-1.5 rounded-full mb-6 shadow-sm overflow-hidden">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <span className="truncate">تسليم فوري عبر واتساب: 2608 695 91 249+</span>
+            <span aria-hidden="true" className="text-amber-500/60 shrink-0">·</span>
+            <span className="truncate">الدفع عبر: بنكك، أوكاش، ماي كاشي، برافو</span>
           </div>
 
           {/* Main Headline */}

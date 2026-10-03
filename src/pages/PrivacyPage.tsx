@@ -7,7 +7,7 @@ interface PrivacyPageProps {
 
 export const PrivacyPage: React.FC<PrivacyPageProps> = ({ onBackToStore }) => {
   return (
-    <div className="min-h-screen bg-[#04060d] text-slate-100 font-['Cairo',sans-serif] selection:bg-amber-500 selection:text-black">
+    <div className="w-full max-w-[100vw] overflow-x-hidden min-h-screen bg-[#04060d] text-slate-100 font-['Cairo',sans-serif] selection:bg-amber-500 selection:text-black">
       
       {/* Top Header */}
       <header className="sticky top-0 z-40 bg-[#070b18]/95 backdrop-blur-md border-b border-amber-500/20 shadow-xl">

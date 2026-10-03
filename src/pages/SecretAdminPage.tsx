@@ -314,7 +314,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({ onBackToStore,
   });
 
   return (
-    <div className="min-h-screen bg-[#04060d] text-slate-100 font-['Cairo',sans-serif] selection:bg-amber-500 selection:text-black">
+    <div className="w-full max-w-[100vw] overflow-x-hidden min-h-screen bg-[#04060d] text-slate-100 font-['Cairo',sans-serif] selection:bg-amber-500 selection:text-black">
       
       {/* Top Banner Navigation */}
       <div className="bg-[#070b18] border-b border-amber-500/25 px-4 sm:px-8 py-4 flex items-center justify-between shadow-xl">

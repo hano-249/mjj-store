@@ -1,1 +1,13 @@
 @import "tailwindcss";
+
+* {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  overflow-x: hidden !important;
+  width: 100%;
+  position: relative;
+}
