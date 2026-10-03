@@ -178,7 +178,7 @@ export default function App() {
     checkAdmin();
   }, [user]);
 
-  // Live Firestore accounts synchronization
+  // Live Firestore accounts synchronization (Simple query: collection(db, "accounts") without any status filter)
   useEffect(() => {
     setLoadingAccounts(true);
     let unsub = () => {};
@@ -191,45 +191,43 @@ export default function App() {
           const list: EFootballAccount[] = [];
           snapshot.forEach((docSnap) => {
             const d = docSnap.data();
-            const isSold = d.status === 'مباع' || d.sold === true || d.status === 'تم البيع' || d.status === 'sold' || d.status?.includes('بيع');
-            if (!isSold) {
-              const ratingNum = d.rating ? parseInt(String(d.rating), 10) : undefined;
-              const imgUrl = d.squadImageBase64 || d.image || '';
-              const platformVal = d.platform || (d.game?.toLowerCase().includes('console') ? 'كونسل' : 'موبايل');
-              const isReserved = d.status === 'محجوز' || d.status?.includes('حجز');
-              list.push({
-                id: docSnap.id,
-                title: d.title || 'حساب eFootball 2026',
-                priceSDG: Number(d.price) || 0,
-                teamStrength: ratingNum,
-                boosterCount: (d.boosterCount !== undefined && d.boosterCount !== '') ? Number(d.boosterCount) : undefined,
-                coins: (d.coins !== undefined && d.coins !== '') ? Number(d.coins) : undefined,
-                gpPoints: d.gpPoints || undefined,
-                platform: platformVal,
-                platformLabel: isReserved ? 'محجوز لعميل' : platformVal,
-                featuredBadge: isReserved ? 'محجوز لعميل 🟡' : undefined,
-                status: d.status || 'متاح للبيع',
-                image: imgUrl,
-                squadImageBase64: d.squadImageBase64 || d.image,
-                division: d.division || undefined,
-                coach: d.coach || d.manager || undefined,
-                manager: d.coach || d.manager || undefined,
-                formation: d.formation || undefined,
-                description: d.description || d.playersDescription || '',
-                playersDescription: d.playersDescription || d.description || '',
-                konamiStatus: 'تسليم يدوي فوري ومباشر عبر واتساب',
-                guaranteeDays: 30
-              });
-            }
+            const ratingNum = d.rating ? parseInt(String(d.rating), 10) : (d.teamStrength ? parseInt(String(d.teamStrength), 10) : undefined);
+            const imgUrl = d.image || d.squadImageBase64 || '';
+            const platformVal = d.platform || 'موبايل';
+            list.push({
+              id: docSnap.id,
+              title: d.title || 'حساب eFootball 2026',
+              priceSDG: Number(d.price) || 0,
+              teamStrength: ratingNum,
+              boosterCount: (d.boosterCount !== undefined && d.boosterCount !== '') ? Number(d.boosterCount) : undefined,
+              coins: (d.coins !== undefined && d.coins !== '') ? Number(d.coins) : undefined,
+              gpPoints: d.gpPoints || undefined,
+              platform: platformVal,
+              platformLabel: platformVal,
+              status: d.status || 'متاح للبيع',
+              sold: Boolean(d.sold || d.status === 'تم البيع' || d.status === 'مباع' || d.status === 'sold'),
+              image: imgUrl,
+              squadImageBase64: d.squadImageBase64 || imgUrl,
+              division: d.division || undefined,
+              coach: d.coach || d.manager || undefined,
+              manager: d.coach || d.manager || undefined,
+              formation: d.formation || undefined,
+              description: d.description || d.playersDescription || '',
+              playersDescription: d.playersDescription || d.description || '',
+              konamiStatus: 'تسليم يدوي فوري ومباشر عبر واتساب',
+              guaranteeDays: 30
+            });
           });
           setAccounts(list);
           setLoadingAccounts(false);
         },
-        () => {
+        (err) => {
+          console.error("Firestore onSnapshot error:", err);
           setLoadingAccounts(false);
         }
       );
-    } catch {
+    } catch (err) {
+      console.error("Firestore sync error:", err);
       setLoadingAccounts(false);
     }
 
@@ -291,15 +289,40 @@ export default function App() {
     setUser(null);
   };
 
-  // Filter accounts (Automatic sorting: Newest first)
-  const filteredAccounts = useMemo(() => {
+  // 1. Available Accounts: filtered 100% in frontend
+  const availableAccounts = useMemo(() => {
     return accounts.filter((acc) => {
-      // 1. Platform filter
-      if (filters.platform !== 'all' && acc.platform !== filters.platform) {
-        return false;
+      const s = (acc.status || '').toString();
+      return (
+        s.includes('متاح') ||
+        s === 'available' ||
+        s === 'متاح للبيع' ||
+        s.includes('available')
+      );
+    });
+  }, [accounts]);
+
+  // 2. Filter accounts in frontend based on Platform, Price, and Search
+  const filteredAccounts = useMemo(() => {
+    return availableAccounts.filter((acc) => {
+      // Platform filter:
+      // If "all", show all accounts without filtering
+      // If "mobile", show if platform contains mobile or موبايل
+      // If "console", show if platform contains console or كونسل
+      if (filters.platform !== 'all') {
+        const p = (acc.platform || '').toLowerCase();
+        if (filters.platform === 'mobile') {
+          if (!p.includes('موبايل') && !p.includes('mobile')) return false;
+        } else if (filters.platform === 'console') {
+          if (!p.includes('كونسل') && !p.includes('console')) return false;
+        }
       }
 
-      // 2. Dynamic Price range filter (No cap)
+      // Price filter:
+      // If "all", show all
+      // If "under-50k", price < 50000
+      // If "50k-150k", 50000 <= price <= 150000
+      // If "above-150k", price > 150000
       if (filters.priceRange === 'under-50k' && acc.priceSDG >= 50000) {
         return false;
       }
@@ -310,22 +333,24 @@ export default function App() {
         return false;
       }
 
-      // 3. Search query
+      // Search query
       if (filters.searchQuery.trim()) {
         const q = filters.searchQuery.toLowerCase().trim();
-        const matchTitle = acc.title.toLowerCase().includes(q);
-        const matchSubtitle = acc.subtitle?.toLowerCase().includes(q);
-        const matchManager = acc.manager?.toLowerCase().includes(q);
-        const matchPlayers = acc.topPlayers?.some((p) => p.toLowerCase().includes(q));
-        const matchId = acc.id.toLowerCase().includes(q);
-        if (!matchTitle && !matchSubtitle && !matchManager && !matchPlayers && !matchId) {
+        const matchTitle = (acc.title || '').toLowerCase().includes(q);
+        const matchSubtitle = (acc.subtitle || '').toLowerCase().includes(q);
+        const matchDesc =
+          (acc.description || '').toLowerCase().includes(q) ||
+          (acc.playersDescription || '').toLowerCase().includes(q);
+        const matchCoach = (acc.coach || acc.manager || '').toLowerCase().includes(q);
+        const matchId = (acc.id || '').toLowerCase().includes(q);
+        if (!matchTitle && !matchSubtitle && !matchDesc && !matchCoach && !matchId) {
           return false;
         }
       }
 
       return true;
     });
-  }, [accounts, filters]);
+  }, [availableAccounts, filters]);
 
   // Wishlist Accounts objects
   const wishlistAccounts = useMemo(() => {
@@ -461,7 +486,7 @@ export default function App() {
         <FilterBar
           filters={filters}
           onFilterChange={setFilters}
-          totalCount={accounts.length}
+          totalCount={availableAccounts.length}
           filteredCount={filteredAccounts.length}
         />
 
@@ -489,15 +514,15 @@ export default function App() {
           <div className="text-center py-16 px-4 bg-[#0a0f24] rounded-2xl border border-slate-800">
             <Trophy className="w-12 h-12 text-slate-600 mx-auto mb-3" />
             <h3 className="text-lg font-bold text-white mb-2">
-              {accounts.length === 0 ? 'لا توجد حسابات معروضة حالياً' : 'لا توجد حسابات مطابقة للبحث'}
+              {availableAccounts.length === 0 ? 'لا توجد حسابات معروضة حالياً' : 'لا توجد حسابات مطابقة للبحث'}
             </h3>
             <p className="text-xs text-slate-400 max-w-md mx-auto mb-6">
-              {accounts.length === 0
+              {availableAccounts.length === 0
                 ? 'ترقبوا تشكيلات وحسابات أسطورية جديدة قريباً، أو تواصل معنا مباشرة لتوفير حساب بمواصفاتك الخاصة.'
                 : 'جرب تغيير كلمات البحث أو اختيار نطاق سعر مختلف، أو تواصل معنا لتوفير حساب بمواصفاتك الخاصة فوراً.'}
             </p>
             <div className="flex justify-center gap-3">
-              {accounts.length > 0 && (
+              {availableAccounts.length > 0 && (
                 <button
                   onClick={() =>
                     setFilters({

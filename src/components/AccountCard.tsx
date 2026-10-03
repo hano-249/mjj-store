@@ -17,8 +17,6 @@ export const AccountCard: React.FC<AccountCardProps> = ({
   onBuyClick,
   onViewDetails
 }) => {
-  const [imgError, setImgError] = useState(false);
-
   const playersText = account.playersDescription || account.description;
   const coachText = account.coach || account.manager;
 
@@ -36,7 +34,7 @@ export const AccountCard: React.FC<AccountCardProps> = ({
       <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5">
         {account.platform && (
           <div className="bg-slate-950/80 backdrop-blur-md border border-slate-700/60 text-slate-300 text-[10px] font-semibold px-2 py-1 rounded-md flex items-center gap-1">
-            {account.platform.includes('console') ? (
+            {account.platform.includes('console') || account.platform.includes('كونسل') ? (
               <>
                 <Gamepad2 className="w-3 h-3 text-blue-400" />
                 <span>كونسل</span>
@@ -73,24 +71,13 @@ export const AccountCard: React.FC<AccountCardProps> = ({
         )}
       </div>
 
-      {/* Card Header Media */}
+      {/* Card Header Media - Direct img src */}
       <div className="relative h-48 w-full bg-slate-900 overflow-hidden cursor-pointer" onClick={() => onViewDetails(account)}>
-        {!imgError ? (
-          <img
-            src={account.squadImageBase64 || account.image}
-            alt={account.title}
-            onError={() => setImgError(true)}
-            className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 brightness-95"
-          />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-blue-950 to-slate-900 text-center p-4">
-            <Sparkles className="w-10 h-10 text-amber-400 mb-2 opacity-80" />
-            <span className="text-xs text-amber-300 font-bold">تشكيلة eFootball 2026</span>
-            {account.teamStrength && (
-              <span className="text-[10px] text-slate-400 mt-1 font-mono">{account.teamStrength} قوة الفريق</span>
-            )}
-          </div>
-        )}
+        <img
+          src={account.image || account.squadImageBase64}
+          alt={account.title}
+          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 brightness-95"
+        />
 
         {/* Media Overlay Scrim */}
         <div className="absolute inset-0 bg-gradient-to-t from-[#090e21] via-transparent to-transparent opacity-90" />
