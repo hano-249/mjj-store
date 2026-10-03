@@ -35,10 +35,10 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onBrowseClick, onWhatsAp
 
           {/* Main Headline */}
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-tight mb-6">
-            أقوى حسابات <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500">eFootball 2026</span>
+            Gunners Store - متجر حسابات eFootball
             <br />
             <span className="text-2xl sm:text-4xl lg:text-5xl text-blue-200 font-extrabold mt-2 block">
-              مضمونة 100% مع ضمان استرجاع
+              أقوى تشكيلات eFootball 2026 مضمونة 100%
             </span>
           </h1>
 

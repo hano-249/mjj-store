@@ -462,7 +462,7 @@ export default function App() {
       <main id="accounts" className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 w-full">
         {/* Hidden SEO H1 Heading */}
         <h1 style={{ position: 'absolute', left: '-9999px' }}>
-          متجر حسابات بيس السودان - GUNNERS STORE - حسابات eFootball قوية
+          Gunners Store - متجر حسابات eFootball
         </h1>
         
         {/* Section Header */}

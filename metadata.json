@@ -1,6 +1,6 @@
 {
   "name": "Gunners Store - متجر حسابات إي فوتبول",
-  "description": "GUNNERS STORE أكبر متجر لبيع حسابات eFootball 2026 في السودان",
+  "description": "Gunners Store أفضل متجر لبيع حسابات إي فوتبول 2026 في السودان. حسابات قوية، دفع بنكك وفوري، تسليم فوري عبر واتساب.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
