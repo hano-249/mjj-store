@@ -21,8 +21,8 @@ import { Footer } from './components/Footer';
 import { Trophy, Flame, RotateCcw, Heart, X } from 'lucide-react';
 
 const ADMIN_UIDS = [
-  'mRqhzZ06Lr012QFgYA1zHw4I8o72',
-  'mRqhzZO6LrO12QFgYA1zHw4I8o72'
+  "mRqhzZO6LrO12QFgYA1zHw4I8o72",
+  "xac8JOhvblZroF3PmijwlOdX5eI3"
 ];
 
 type RouteState = 'store' | 'admin' | 'terms' | 'privacy';
@@ -331,7 +331,7 @@ export default function App() {
   };
 
   // Security Check: Is the user an authenticated admin?
-  const isAuthorizedAdmin = Boolean(user && ADMIN_UIDS.includes(user.uid));
+  const isAdmin = Boolean(user && ADMIN_UIDS.includes(user.uid));
 
   // 1. Terms Page Route
   if (currentRoute === 'terms') {
@@ -345,7 +345,7 @@ export default function App() {
 
   // 3. Secret Admin Route
   if (currentRoute === 'admin') {
-    if (!isAuthorizedAdmin) {
+    if (!isAdmin) {
       return (
         <div className="min-h-screen bg-[#050811] text-slate-100 flex flex-col items-center justify-center p-6 text-center font-['Cairo',sans-serif]">
           <div className="max-w-md w-full bg-[#080d21] border border-slate-800 rounded-2xl p-8 shadow-2xl">
@@ -398,9 +398,9 @@ export default function App() {
         user={user}
         loadingAuth={loadingAuth}
         wishlistCount={wishlistIds.length}
-        isAdmin={isAuthorizedAdmin}
+        isAdmin={isAdmin}
         onOpenWishlist={() => setIsWishlistOpen(true)}
-        onOpenAdmin={isAuthorizedAdmin ? navigateToAdmin : undefined}
+        onOpenAdmin={isAdmin ? navigateToAdmin : undefined}
         onInitiateSignIn={handleInitiateGoogleSignIn}
         onSignOut={handleSignOut}
         authError={authError}
@@ -414,6 +414,10 @@ export default function App() {
 
       {/* Main Accounts Catalog Section */}
       <main id="accounts" className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 w-full">
+        {/* Hidden SEO H1 Heading */}
+        <h1 style={{ position: 'absolute', left: '-9999px' }}>
+          متجر حسابات بيس السودان - MJ STORE - حسابات eFootball قوية
+        </h1>
         
         {/* Section Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
