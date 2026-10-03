@@ -55,7 +55,7 @@ export const BuyModal: React.FC<BuyModalProps> = ({ account, user, onOrderCreate
       accountTitle: account.title,
       accountPriceSDG: account.priceSDG,
       teamStrength: account.teamStrength,
-      platform: account.platform,
+      platform: account.platform || 'موبايل',
       customerName: buyerName || (user?.displayName || 'عميل المتجر'),
       customerPhone: buyerPhone || 'عبر الواتساب',
       paymentMethod: paymentMethodLabels[paymentMethod],
@@ -132,9 +132,13 @@ export const BuyModal: React.FC<BuyModalProps> = ({ account, user, onOrderCreate
               <div className="flex-1 min-w-0">
                 <h4 className="text-sm font-bold text-white truncate">{account.title}</h4>
                 <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
-                  <span className="text-amber-400 font-mono font-bold">قوة {account.teamStrength}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{account.platform === 'mobile' ? 'موبايل' : 'كونسول'}</span>
+                  {account.teamStrength && (
+                    <>
+                      <span className="text-amber-400 font-mono font-bold">قوة {account.teamStrength}</span>
+                      <span aria-hidden="true">·</span>
+                    </>
+                  )}
+                  <span>{account.platform || 'موبايل'}</span>
                 </div>
                 <div className="text-sm font-black text-amber-400 font-mono mt-1">
                   {account.priceSDG.toLocaleString()} SDG

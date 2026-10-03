@@ -3,26 +3,30 @@ export type PlatformType = 'mobile' | 'console' | 'all';
 export interface EFootballAccount {
   id: string;
   title: string;
-  subtitle: string;
   priceSDG: number;
-  teamStrength: number; // e.g. 3155
-  boosterCount: number; // e.g. 14
-  messiCount: number; // e.g. 2
-  ronaldoCount: number; // e.g. 1
-  coins: number; // e.g. 3500
-  gpPoints: string; // e.g. "4.8M"
-  platform: 'mobile' | 'console';
-  platformLabel: string; // e.g. "موبايل (Android / iOS)"
   image: string;
   squadImageBase64?: string; // Direct Base64 Data URL
+  status?: string; // متاح للبيع / محجوز / تم البيع
+  sold?: boolean;
+  subtitle?: string;
+  teamStrength?: number; // e.g. 3155
+  boosterCount?: number; // e.g. 14
+  messiCount?: number; // e.g. 2
+  ronaldoCount?: number; // e.g. 1
+  coins?: number; // e.g. 3500
+  gpPoints?: string; // e.g. "4.8M"
+  platform?: 'mobile' | 'console' | string;
+  platformLabel?: string; // e.g. "موبايل (Android / iOS)"
   featuredBadge?: string; // e.g. "الأكثر طلباً" or "تشكيلة أساطير"
-  division: string; // e.g. "ديفيجن 1 (Division 1)"
-  manager: string; // e.g. "بيب غوارديولا (Boost 88)" or "يورغن كلوب"
-  formation: string; // e.g. "4-2-1-3"
-  topPlayers: string[]; // key epic / showtime players
-  description: string;
-  konamiStatus: string; // e.g. "إيميل أساسي متاح للتغيير الكامل"
-  guaranteeDays: number; // e.g. 30
+  division?: string; // e.g. "ديفيجن 1 (Division 1)"
+  coach?: string; // المدرب والتوافق
+  manager?: string; // e.g. "بيب غوارديولا (Boost 88)" or "يورغن كلوب"
+  formation?: string; // e.g. "4-2-1-3"
+  topPlayers?: string[]; // key epic / showtime players
+  description?: string;
+  playersDescription?: string; // وصف التشكيلة وأبرز اللاعبين
+  konamiStatus?: string; // e.g. "إيميل أساسي متاح للتغيير الكامل"
+  guaranteeDays?: number; // e.g. 30
 }
 
 export type PriceRangeType = 'all' | 'under-50k' | '50k-150k' | 'above-150k';
@@ -48,8 +52,8 @@ export interface CustomerOrder {
   accountId: string;
   accountTitle: string;
   accountPriceSDG: number;
-  teamStrength: number;
-  platform: 'mobile' | 'console';
+  teamStrength?: number;
+  platform?: string;
   customerName: string;
   customerPhone: string;
   paymentMethod: string;

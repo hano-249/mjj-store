@@ -191,33 +191,32 @@ export default function App() {
           const list: EFootballAccount[] = [];
           snapshot.forEach((docSnap) => {
             const d = docSnap.data();
-            const isSold = d.status === 'مباع' || d.sold === true;
+            const isSold = d.status === 'مباع' || d.sold === true || d.status === 'تم البيع' || d.status === 'sold' || d.status?.includes('بيع');
             if (!isSold) {
-              const ratingNum = parseInt(d.rating || d.teamStrength || '3150', 10) || 3150;
-              const imgUrl = d.squadImageBase64 || d.image || '/src/assets/images/squad_showcase_legends_1790969434039.jpg';
+              const ratingNum = d.rating ? parseInt(String(d.rating), 10) : undefined;
+              const imgUrl = d.squadImageBase64 || d.image || '';
+              const platformVal = d.platform || (d.game?.toLowerCase().includes('console') ? 'كونسل' : 'موبايل');
+              const isReserved = d.status === 'محجوز' || d.status?.includes('حجز');
               list.push({
                 id: docSnap.id,
                 title: d.title || 'حساب eFootball 2026',
-                subtitle: d.description || '',
                 priceSDG: Number(d.price) || 0,
                 teamStrength: ratingNum,
-                boosterCount: Number(d.boosterCount) || 5,
-                messiCount: Number(d.messiCount) || 1,
-                ronaldoCount: Number(d.ronaldoCount) || 1,
-                coins: Number(d.coins) || 0,
-                gpPoints: d.gpPoints || '1M',
-                platform: d.game?.toLowerCase().includes('console') ? 'console' : 'mobile',
-                platformLabel: d.status === 'محجوز' ? 'محجوز لعميل' : 'موبايل (Android / iOS)',
-                featuredBadge: d.status === 'محجوز' ? 'محجوز لعميل 🟡' : undefined,
+                boosterCount: (d.boosterCount !== undefined && d.boosterCount !== '') ? Number(d.boosterCount) : undefined,
+                coins: (d.coins !== undefined && d.coins !== '') ? Number(d.coins) : undefined,
+                gpPoints: d.gpPoints || undefined,
+                platform: platformVal,
+                platformLabel: isReserved ? 'محجوز لعميل' : platformVal,
+                featuredBadge: isReserved ? 'محجوز لعميل 🟡' : undefined,
+                status: d.status || 'متاح للبيع',
                 image: imgUrl,
                 squadImageBase64: d.squadImageBase64 || d.image,
-                division: d.division || 'ديفيجن 1',
-                manager: d.manager || 'تشكيلة أساطير',
-                formation: d.formation || '4-3-3',
-                topPlayers: Array.isArray(d.topPlayers)
-                  ? d.topPlayers
-                  : (d.description ? [d.description] : ['نجوم الأساطير']),
-                description: d.description || '',
+                division: d.division || undefined,
+                coach: d.coach || d.manager || undefined,
+                manager: d.coach || d.manager || undefined,
+                formation: d.formation || undefined,
+                description: d.description || d.playersDescription || '',
+                playersDescription: d.playersDescription || d.description || '',
                 konamiStatus: 'تسليم يدوي فوري ومباشر عبر واتساب',
                 guaranteeDays: 30
               });
